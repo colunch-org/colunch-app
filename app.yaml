@@ -1,0 +1,3 @@
+runtime: python312
+
+entrypoint: uvicorn --port 8080 main:app
