@@ -1,3 +1,6 @@
-starlette
 httpx
-uvicorn
+pydantic-settings
+python-multipart
+pytube
+starlette
+uvicorn[standard]
