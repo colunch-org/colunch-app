@@ -1,4 +1,5 @@
 httpx
+markdown2
 pydantic-settings
 python-multipart
 pytube

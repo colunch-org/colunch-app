@@ -3,13 +3,14 @@ from pathlib import Path
 from urllib.parse import urlencode
 import uuid
 
+from markdown2 import markdown  # pyright: ignore[reportMissingTypeStubs]
 from pydantic_settings import BaseSettings
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
-
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
-from starlette.routing import Route, WebSocketRoute
+from starlette.routing import Mount, Route, WebSocketRoute
+from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
 from aopenai import AudioTranslation, Chat, ChatMsg
@@ -27,13 +28,13 @@ class Env(Enum):
 
 class Config(BaseSettings):
     env: Env = Env.local
-    templates_dir: Path = Path("templates")
+    html_dir: Path = Path("assets/html")
 
 
 CONFIG = Config()
 
 
-with open(CONFIG.templates_dir / "index.html") as f:
+with open(CONFIG.html_dir / "index.html") as f:
     INDEX_HTML = f.read()
 
 
@@ -51,9 +52,12 @@ async def youtube(request: Request) -> HTMLResponse:
     url = urlencode({"youtube-url": url})
     print(url)
     ws = f"""
-    <div hx-ext="ws" ws-connect="/recipe-from-youtube?{url}">
-      <div id="chat" hx-swap-oob="beforeend"></div>
-    </div>
+    <div
+      id="recipe-from-youtube-ws"
+      hx-swap-oob="true"
+      hx-ext="ws"
+      ws-connect="/recipe-from-youtube?{url}"
+    ></div>
     """
     return HTMLResponse(ws)
 
@@ -66,25 +70,35 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     # return a red input box or notification or something
     yt = YouTube(url)
 
-    audio = yt.streams.get_audio_only()
+    await ws.send_text("""
+        <input
+          id="youtube-url"
+          name="youtube-url"
+          type="text"
+          class="form-control"
+          placeholder="YouTube url ..."
+          hx-post="/youtube"
+          hx-swap-oob="true"
+        ></input>
+    """)
 
-    await ws.send_text("<div>Grabbed audio.</div>")
+    await ws.send_text(f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>')
+    audio = yt.streams.get_audio_only()
 
     if not audio:
         raise ValueError("No audio.")
 
     audio_path = Path(f"{uuid.uuid4().hex}.mp4")
-    print(audio_path)
 
     audio.download(filename=str(audio_path))
 
+    await ws.send_text('<div id="recipe-content" hx-swap-oob="true">Grabbing transcript ...</div>')
     with open(audio_path, "rb") as audio_file:
         translation = await AudioTranslation().translate(audio=audio_file)
 
     audio_path.unlink()
 
-    print(translation)
-    await ws.send_text(f"<div>{translation}</div>")
+    await ws.send_text('<div id="recipe-content" hx-swap-oob="true">Grabbing recipe ...</div>')
     prompt = [
         ChatMsg(
             role="system",
@@ -98,8 +112,10 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     )
 
     recipe = await Chat(messages=prompt).chat(msg)
-    print(recipe)
-    await ws.send_text(f"<div>{recipe}</div>")
+    await ws.send_text(f'<div id="recipe-content" hx-swap-oob="true">{markdown(recipe)}</div>')
+    await ws.send_text('<div id="recipe-from-youtube-ws" hx-swap-oob="true"</div>')
+
+    await ws.close()
 
 
 app = Starlette(
@@ -107,5 +123,6 @@ app = Starlette(
         Route("/", homepage),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
+        Mount("/assets", app=StaticFiles(directory="assets"), name="assets")
     ],
 )
