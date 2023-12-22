@@ -1,3 +1,4 @@
+import asyncio
 from enum import Enum
 from pathlib import Path
 from urllib.parse import urlencode
@@ -83,14 +84,17 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     """)
 
     await ws.send_text(f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>')
-    audio = yt.streams.get_audio_only()
+    await asyncio.sleep(0)
+    audio = await asyncio.to_thread(yt.streams.get_audio_only)
+    await asyncio.sleep(0)
 
     if not audio:
         raise ValueError("No audio.")
 
     audio_path = Path(f"{uuid.uuid4().hex}.mp4")
 
-    audio.download(filename=str(audio_path))
+    await asyncio.to_thread(audio.download, filename=str(audio_path))
+    await asyncio.sleep(0)
 
     await ws.send_text('<div id="recipe-content" hx-swap-oob="true">Grabbing transcript ...</div>')
     with open(audio_path, "rb") as audio_file:
@@ -98,21 +102,43 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
 
     audio_path.unlink()
 
-    await ws.send_text('<div id="recipe-content" hx-swap-oob="true">Grabbing recipe ...</div>')
+    await ws.send_text(
+        f"""
+        <div id="recipe-content" hx-swap-oob="true">
+        <div>Grabbing recipe from the transcript ...</div>
+        <br/>
+        <div>{translation}</div>
+        </div>
+        """
+    )
     prompt = [
         ChatMsg(
             role="system",
-            content="You are a world class assistant for summarising cooking video transcripts",
+            content=(
+                "You are a world class assistant for summarising cooking video transcripts. "
+            ),
         ),
     ]
 
     msg = (
         "List the ingredients and preparation steps for each recipe in the "
-        f"following transcript. {translation}"
+        "following transcript. Each preparation step should make sense in isolation. "
+        "If you think there are corrections to be made, make them in place but identify "
+        "where corrections have been made. "
+        "Include notes at the end of the response and suggest three similar recipes. "
+        "Format your response in correct markdown but do not tell me the markdown is correct. "
+        f"{translation}"
     )
 
     recipe = await Chat(messages=prompt).chat(msg)
-    await ws.send_text(f'<div id="recipe-content" hx-swap-oob="true">{markdown(recipe)}</div>')
+    await ws.send_text(
+        f"""<div id="recipe-content" hx-swap-oob="true">
+        <div>{markdown(recipe)}</div>
+        <br/>
+        <div>From the transcript ...</div>
+        <div>{translation}</div>
+        """
+    )
     await ws.send_text('<div id="recipe-from-youtube-ws" hx-swap-oob="true"</div>')
 
     await ws.close()
