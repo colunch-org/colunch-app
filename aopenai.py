@@ -1,12 +1,16 @@
 import asyncio
+import base64
+from enum import Enum
 from io import BufferedReader
 import os
-from typing import Any, Self
+from pathlib import Path
+from typing import Any, Protocol, Self
 
 import httpx
 
 
 OPENAI_TOKEN = os.environ.get("OPENAI_API_KEY")
+MAX_TOKENS = 3000
 
 
 def openai_client(token: str | None = None) -> httpx.AsyncClient:
@@ -21,6 +25,11 @@ def openai_client(token: str | None = None) -> httpx.AsyncClient:
     )
 
 
+def encode_image(image_path: Path | str):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
+
 system_msg = {
     "role": "system",
     "content": (
@@ -32,13 +41,54 @@ system_msg = {
 }
 
 
+class Content(Protocol):
+    def to_dict(self) -> dict[str, Any]:
+        ...
+
+
+class ContentType(Enum):
+    text = "text"
+    image_url = "image_url"
+
+
+class TextContent:
+    type = ContentType.text
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type.value, "text": self.text}
+
+
+class ImgContent:
+    type = ContentType.image_url
+
+    @classmethod
+    def from_path(cls, path: Path | str) -> Self:
+        base64_image = encode_image(path)
+        url = f"data:image/jpeg;base64,{base64_image}"
+        return cls(url=url)
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type.value, "image_url": {"url": self.url}}
+
+
 class ChatMsg:
-    def __init__(self, *, role: str, content: str) -> None:
+    def __init__(self, *, role: str, content: str | list[Content]) -> None:
         self.role = role
         self.content = content
 
-    def dict(self) -> dict[str, str]:
-        return {"role": self.role, "content": self.content}
+    def to_dict(self) -> dict[str, Any]:
+        content = (
+            self.content
+            if isinstance(self.content, str)
+            else [c.to_dict() for c in self.content]
+        )
+        return {"role": self.role, "content": content}
 
 
 class Chat:
@@ -50,7 +100,7 @@ class Chat:
         model: str = "gpt-4-1106-preview",
         client: httpx.AsyncClient | None = None,
     ) -> Self:
-        messages = [ChatMsg(role="system", content=prompt)]
+        messages: list[ChatMsg] = [ChatMsg(role="system", content=prompt)]
         return cls(model=model, messages=messages, client=client)
 
     def __init__(
@@ -58,25 +108,35 @@ class Chat:
         *,
         model: str = "gpt-4-1106-preview",
         messages: list[ChatMsg] | None = None,
+        max_tokens: int = MAX_TOKENS,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.model = model
         self._messages: list[ChatMsg] = [] if messages is None else messages
+        self.max_tokens = max_tokens
         self._client = openai_client() if client is None else client
 
-    def dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "model": self.model,
-            "messages": [m.dict() for m in self._messages],
+            "messages": [m.to_dict() for m in self._messages],
+            "max_tokens": self.max_tokens,
         }
 
-    async def chat(self, msg: str) -> str:
-        self._messages.append(ChatMsg(role="user", content=msg))
-        resp = await self._client.post("chat/completions", json=self.dict())
+    async def _chat_raw(self, data: dict[str, Any]) -> list[ChatMsg]:
+        resp = await self._client.post("chat/completions", json=data)
         data = resp.json()
         if "error" in data:
             raise ValueError(f"Problem creating completion. {data}")
-        chat_msgs = [ChatMsg(**c["message"]) for c in data["choices"]]
+        return [ChatMsg(**c["message"]) for c in data["choices"]]
+
+    async def send_messages(self) -> list[ChatMsg]:
+        return await self._chat_raw(self.to_dict())
+
+    async def chat(self, msg: str | ChatMsg) -> str:
+        chat_msg = ChatMsg(role="user", content=msg) if isinstance(msg, str) else msg
+        self._messages.append(chat_msg)
+        chat_msgs = await self.send_messages()
         self._messages.extend(chat_msgs)
         return "\n".join(c.content for c in chat_msgs)
 

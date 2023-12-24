@@ -4,17 +4,20 @@ from pathlib import Path
 from urllib.parse import urlencode
 import uuid
 
-from markdown2 import markdown  # pyright: ignore[reportMissingTypeStubs]
+from markdown2 import (  # pyright: ignore[reportMissingTypeStubs]
+    markdown,  # pyright: ignore[reportUnknownVariableType]
+)
 from pydantic_settings import BaseSettings
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 from starlette.applications import Starlette
+from starlette.datastructures import UploadFile
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
-from aopenai import AudioTranslation, Chat, ChatMsg
+from aopenai import AudioTranslation, Chat, ChatMsg, Content, ImgContent, TextContent
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
@@ -63,15 +66,87 @@ async def youtube(request: Request) -> HTMLResponse:
     return HTMLResponse(ws)
 
 
+async def images(request: Request) -> HTMLResponse:
+    img_paths: list[Path] = []
+    async with request.form() as form:
+        print(form.getlist("images"))
+        for fobj in form.getlist("images"):
+            assert isinstance(fobj, UploadFile)
+            contents = await fobj.read()
+            ext = Path(fobj.filename).suffix if fobj.filename else ".jpeg"
+            print(fobj.filename, ext)
+            img_path = Path(f"{uuid.uuid4().hex}{ext}")
+            with open(img_path, "wb") as f:
+                f.write(contents)
+            img_paths.append(img_path)
+    url = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
+    print(url)
+    ws = f"""
+    <div
+      id="recipe-from-images-ws"
+      hx-swap-oob="true"
+      hx-ext="ws"
+      ws-connect="/recipe-from-images?{url}"
+    ></div>
+    """
+    return HTMLResponse(ws)
+
+
+async def recipe_from_images(ws: WebSocket) -> None:
+    img_paths = ws.query_params.getlist("images")
+    img_paths = [Path(i) for i in img_paths]
+    print(img_paths)
+
+    prompt = (
+        "You are a world class assistant for listing cooking ingredients in images and, "
+        "where it appears one or more of the images contains a finished dish, "
+        "providing the preparation steps, as well as required finishing steps, "
+        "to achieve the finished dish including a likely "
+        "amount of time each step will take where appropriate. "
+        "Do not tell me the utensils or what the ingredients are inside or on top of "
+        "but use them to help identify the ingredients. "
+        "Where you are unsure, you can use other ingredients likely to be "
+        "paired with the identified ingredients to help inform the list. "
+        "Where you are still unsure, provide the three most likely options."
+    )
+
+    await ws.accept()
+    # chat = Chat.from_system_prompt(
+    #     prompt=(
+    #         "You are a world class assistant for listing cooking ingredients in images and, "
+    #         "where it appears one or more of the images contains a finished dish, "
+    #         "providing the preparation steps, as well as required finishing steps, "
+    #         "to achieve the finished dish including a likely "
+    #         "amount of time each step will take where appropriate. "
+    #         "Do not tell me the utensils or what the ingredients are inside or on top of "
+    #         "but use them to help identify the ingredients. "
+    #         "Where you are unsure, you can use other ingredients likely to be "
+    #         "paired with the identified ingredients to help inform the list. "
+    #         "Where you are still unsure, provide the three most likely options."
+    #     ),
+    #     model="gpt-4-vision-preview",
+    # )
+    content: list[Content] = [TextContent(prompt)]
+    for img_path in img_paths:
+        content.append(ImgContent.from_path(img_path))
+        img_path.unlink()
+    chat = Chat(model="gpt-4-vision-preview")
+
+    recipe = await chat.chat(ChatMsg(role="user", content=content))
+    print(recipe)
+
+    await ws.close()
+
+
 async def recipe_from_youtube(ws: WebSocket) -> None:
-    print(ws.query_params)
     url = ws.query_params["youtube-url"]
     await ws.accept()
     # check is valid
     # return a red input box or notification or something
     yt = YouTube(url)
 
-    await ws.send_text("""
+    await ws.send_text(
+        """
         <input
           id="youtube-url"
           name="youtube-url"
@@ -81,9 +156,12 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
           hx-post="/youtube"
           hx-swap-oob="true"
         ></input>
-    """)
+    """
+    )
 
-    await ws.send_text(f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>')
+    await ws.send_text(
+        f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>'
+    )
     await asyncio.sleep(0)
     audio = await asyncio.to_thread(yt.streams.get_audio_only)
     await asyncio.sleep(0)
@@ -96,7 +174,9 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     await asyncio.to_thread(audio.download, filename=str(audio_path))
     await asyncio.sleep(0)
 
-    await ws.send_text('<div id="recipe-content" hx-swap-oob="true">Grabbing transcript ...</div>')
+    await ws.send_text(
+        '<div id="recipe-content" hx-swap-oob="true">Grabbing transcript ...</div>'
+    )
     with open(audio_path, "rb") as audio_file:
         translation = await AudioTranslation().translate(audio=audio_file)
 
@@ -125,9 +205,10 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
         "following transcript. Each preparation step should make sense in isolation. "
         "If you think there are corrections to be made, make them in place but identify "
         "where corrections have been made. "
-        "Include notes at the end of the response and suggest three similar recipes. "
+        "Include notes at the end of the response and suggest three similar recipes "
+        "with a brief descriptions."
         "Format your response in correct markdown but do not tell me the markdown is correct. "
-        f"{translation}"
+        f"Transcript: {translation}"
     )
 
     recipe = await Chat(messages=prompt).chat(msg)
@@ -149,6 +230,8 @@ app = Starlette(
         Route("/", homepage),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
-        Mount("/assets", app=StaticFiles(directory="assets"), name="assets")
+        Route("/images", images, methods=["POST"]),
+        WebSocketRoute("/recipe-from-images", recipe_from_images),
+        Mount("/assets", app=StaticFiles(directory="assets"), name="assets"),
     ],
 )

@@ -27,8 +27,26 @@
           hx-swap-oob="true"
         ></input>
       </div>
+      <div>
+        <form hx-encoding="multipart/form-data">
+          <input
+            id="images"
+            name="images"
+            type="file"
+            class="form-control"
+            hx-swap-oob="true"
+            multiple
+          ></input>
+          <input
+            type="submit"
+            hx-post="/images"
+            hx-include="images"
+          ></input>
+        </form>
+      </div>
       <div id="recipe-content" hx-swap-oob="true"></div>
       <div id="recipe-from-youtube-ws" hx-swap-oob="true"</div>
+      <div id="recipe-from-images-ws" hx-swap-oob="true"</div>
     </div>
 
     <script src="assets/js/htmx.min.js"></script>
