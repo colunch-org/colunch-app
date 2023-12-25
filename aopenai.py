@@ -138,7 +138,13 @@ class Chat:
         self._messages.append(chat_msg)
         chat_msgs = await self.send_messages()
         self._messages.extend(chat_msgs)
-        return "\n".join(c.content for c in chat_msgs)
+        s = ""
+        for part in chat_msgs:
+            if isinstance(part.content, str):
+                s += "\n" + part.content
+            else:
+                raise RuntimeError("Non-string response content not supported.")
+        return s
 
     async def close(self) -> None:
         await self._client.aclose()

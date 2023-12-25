@@ -103,37 +103,50 @@ async def recipe_from_images(ws: WebSocket) -> None:
         "providing the preparation steps, as well as required finishing steps, "
         "to achieve the finished dish including a likely "
         "amount of time each step will take where appropriate. "
+        "Ingredients should include quanties approproiate for the recipe. "
+        "Assume the images all relate to the same recipe unless explicitly told otherwise. "
         "Do not tell me the utensils or what the ingredients are inside or on top of "
         "but use them to help identify the ingredients. "
         "Where you are unsure, you can use other ingredients likely to be "
         "paired with the identified ingredients to help inform the list. "
         "Where you are still unsure, provide the three most likely options."
+        "Format your response in correct markdown but do not tell me the markdown is correct. "
     )
 
     await ws.accept()
-    # chat = Chat.from_system_prompt(
-    #     prompt=(
-    #         "You are a world class assistant for listing cooking ingredients in images and, "
-    #         "where it appears one or more of the images contains a finished dish, "
-    #         "providing the preparation steps, as well as required finishing steps, "
-    #         "to achieve the finished dish including a likely "
-    #         "amount of time each step will take where appropriate. "
-    #         "Do not tell me the utensils or what the ingredients are inside or on top of "
-    #         "but use them to help identify the ingredients. "
-    #         "Where you are unsure, you can use other ingredients likely to be "
-    #         "paired with the identified ingredients to help inform the list. "
-    #         "Where you are still unsure, provide the three most likely options."
-    #     ),
-    #     model="gpt-4-vision-preview",
-    # )
+    # send a blank input back
+    await ws.send_text(
+        """    
+        <input
+        id="images"
+        name="images"
+        type="file"
+        class="form-control"
+        hx-swap-oob="true"
+        multiple
+        ></input>
+        """
+    )
+
     content: list[Content] = [TextContent(prompt)]
     for img_path in img_paths:
         content.append(ImgContent.from_path(img_path))
         img_path.unlink()
+
+    await ws.send_text(
+        '<div id="recipe-content" hx-swap-oob="true">Grabbing recipe ...</div>'
+    )
     chat = Chat(model="gpt-4-vision-preview")
 
     recipe = await chat.chat(ChatMsg(role="user", content=content))
-    print(recipe)
+    await ws.send_text(
+        f"""<div id="recipe-content" hx-swap-oob="true">
+        <div>{markdown(recipe)}</div>
+        <br/>
+        """
+    )
+
+    await ws.send_text('<div id="recipe-from-images-ws" hx-swap-oob="true"</div>')
 
     await ws.close()
 
