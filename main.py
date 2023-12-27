@@ -18,6 +18,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
 from aopenai import AudioTranslation, Chat, ChatMsg, Content, ImgContent, TextContent
+from prompts import Prompt
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
@@ -95,23 +96,6 @@ async def images(request: Request) -> HTMLResponse:
 async def recipe_from_images(ws: WebSocket) -> None:
     img_paths = ws.query_params.getlist("images")
     img_paths = [Path(i) for i in img_paths]
-    print(img_paths)
-
-    prompt = (
-        "You are a world class assistant for listing cooking ingredients in images and, "
-        "where it appears one or more of the images contains a finished dish, "
-        "providing the preparation steps, as well as required finishing steps, "
-        "to achieve the finished dish including a likely "
-        "amount of time each step will take where appropriate. "
-        "Ingredients should include quanties approproiate for the recipe. "
-        "Assume the images all relate to the same recipe unless explicitly told otherwise. "
-        "Do not tell me the utensils or what the ingredients are inside or on top of "
-        "but use them to help identify the ingredients. "
-        "Where you are unsure, you can use other ingredients likely to be "
-        "paired with the identified ingredients to help inform the list. "
-        "Where you are still unsure, provide the three most likely options."
-        "Format your response in correct markdown but do not tell me the markdown is correct. "
-    )
 
     await ws.accept()
     # send a blank input back
@@ -128,7 +112,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
         """
     )
 
-    content: list[Content] = [TextContent(prompt)]
+    content: list[Content] = [TextContent(Prompt())]
     for img_path in img_paths:
         content.append(ImgContent.from_path(img_path))
         img_path.unlink()
@@ -204,26 +188,8 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
         </div>
         """
     )
-    prompt = [
-        ChatMsg(
-            role="system",
-            content=(
-                "You are a world class assistant for summarising cooking video transcripts. "
-            ),
-        ),
-    ]
-
-    msg = (
-        "List the ingredients and preparation steps for each recipe in the "
-        "following transcript. Each preparation step should make sense in isolation. "
-        "If you think there are corrections to be made, make them in place but identify "
-        "where corrections have been made. "
-        "Include notes at the end of the response and suggest three similar recipes "
-        "with a brief descriptions."
-        "Format your response in correct markdown but do not tell me the markdown is correct. "
-        f"Transcript: {translation}"
-    )
-
+    prompt = [ChatMsg(role="system", content=Prompt())]
+    msg = f"Transcript: {translation}"
     recipe = await Chat(messages=prompt).chat(msg)
     await ws.send_text(
         f"""<div id="recipe-content" hx-swap-oob="true">

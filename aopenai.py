@@ -8,6 +8,8 @@ from typing import Any, Protocol, Self
 
 import httpx
 
+from prompts import Prompt
+
 
 OPENAI_TOKEN = os.environ.get("OPENAI_API_KEY")
 MAX_TOKENS = 3000
@@ -54,8 +56,8 @@ class ContentType(Enum):
 class TextContent:
     type = ContentType.text
 
-    def __init__(self, text: str) -> None:
-        self.text = text
+    def __init__(self, text: str | Prompt) -> None:
+        self.text = str(text)
 
     def to_dict(self) -> dict[str, Any]:
         return {"type": self.type.value, "text": self.text}
@@ -78,14 +80,14 @@ class ImgContent:
 
 
 class ChatMsg:
-    def __init__(self, *, role: str, content: str | list[Content]) -> None:
+    def __init__(self, *, role: str, content: str | list[Content] | Prompt) -> None:
         self.role = role
         self.content = content
 
     def to_dict(self) -> dict[str, Any]:
         content = (
-            self.content
-            if isinstance(self.content, str)
+            str(self.content)
+            if isinstance(self.content, (str, Prompt))
             else [c.to_dict() for c in self.content]
         )
         return {"role": self.role, "content": content}
