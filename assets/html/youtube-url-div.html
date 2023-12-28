@@ -1,0 +1,18 @@
+<div name="youtube-url-div" hx-swap-oob="true">
+  <form>
+    <input
+      id="youtube-url"
+      name="youtube-url"
+      type="text"
+      class="form-control"
+      placeholder="YouTube url ..."
+      hx-post="/youtube"
+      hx-swap-oob="true"
+    ></input>
+    <input
+      type="submit"
+      hx-post="/youtube"
+      hx-include="youtube-url"
+    ></input>
+  </form>
+</div>

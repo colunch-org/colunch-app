@@ -1,0 +1,17 @@
+<div name="images-div" hx-swap-oob="true">
+  <form hx-encoding="multipart/form-data">
+    <input
+      id="images"
+      name="images"
+      type="file"
+      class="form-control"
+      hx-swap-oob="true"
+      multiple
+    ></input>
+    <input
+      type="submit"
+      hx-post="/images"
+      hx-include="images"
+    ></input>
+  </form>
+</div>

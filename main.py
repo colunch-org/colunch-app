@@ -39,122 +39,61 @@ class Config(BaseSettings):
 CONFIG = Config()
 
 
-with open(CONFIG.html_dir / "index.html") as f:
-    INDEX_HTML = f.read()
+class Html:
+    def __init__(self, html_dir: Path | None = None) -> None:
+        html_dir = CONFIG.html_dir if html_dir is None else html_dir
+
+        with open(html_dir / "index.html") as f:
+            self.index = f.read()
+
+        with open(html_dir / "preferences.html") as f:
+            self.preferences = f.read()
+
+        with open(html_dir / "youtube-url-div.html") as f:
+            self.youtube_url_form = f.read()
+
+        with open(html_dir / "youtube-url-ws.html") as f:
+            self.youtube_url_ws = f.read()
+
+        with open(html_dir / "images-div.html") as f:
+            self.images_form = f.read()
+
+        with open(html_dir / "images-ws.html") as f:
+            self.images_ws = f.read()
+
+
+HTML = Html()
 
 
 async def homepage(request: Request) -> HTMLResponse:
-    return HTMLResponse(INDEX_HTML)
+    return HTMLResponse(HTML.index)
+
+
+async def youtube_url_form(request: Request) -> HTMLResponse:
+    """Div containing the youtube url form."""
+    return HTMLResponse(HTML.youtube_url_form)
 
 
 async def youtube(request: Request) -> HTMLResponse:
+    """Div containing the youtube url websocket connection."""
     async with request.form() as form:
         print(form)
         url = form.get("youtube-url")
-    print(url)
     if not isinstance(url, str):
         return HTMLResponse("URL not a string.")
     url = urlencode({"youtube-url": url})
-    print(url)
-    ws = f"""
-    <div
-      id="recipe-from-youtube-ws"
-      hx-swap-oob="true"
-      hx-ext="ws"
-      ws-connect="/recipe-from-youtube?{url}"
-    ></div>
-    """
-    return HTMLResponse(ws)
-
-
-async def images(request: Request) -> HTMLResponse:
-    img_paths: list[Path] = []
-    async with request.form() as form:
-        print(form.getlist("images"))
-        for fobj in form.getlist("images"):
-            assert isinstance(fobj, UploadFile)
-            contents = await fobj.read()
-            ext = Path(fobj.filename).suffix if fobj.filename else ".jpeg"
-            print(fobj.filename, ext)
-            img_path = Path(f"{uuid.uuid4().hex}{ext}")
-            with open(img_path, "wb") as f:
-                f.write(contents)
-            img_paths.append(img_path)
-    url = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
-    print(url)
-    ws = f"""
-    <div
-      id="recipe-from-images-ws"
-      hx-swap-oob="true"
-      hx-ext="ws"
-      ws-connect="/recipe-from-images?{url}"
-    ></div>
-    """
-    return HTMLResponse(ws)
-
-
-async def recipe_from_images(ws: WebSocket) -> None:
-    img_paths = ws.query_params.getlist("images")
-    img_paths = [Path(i) for i in img_paths]
-
-    await ws.accept()
-    # send a blank input back
-    await ws.send_text(
-        """    
-        <input
-        id="images"
-        name="images"
-        type="file"
-        class="form-control"
-        hx-swap-oob="true"
-        multiple
-        ></input>
-        """
-    )
-
-    content: list[Content] = [TextContent(Prompt())]
-    for img_path in img_paths:
-        content.append(ImgContent.from_path(img_path))
-        img_path.unlink()
-
-    await ws.send_text(
-        '<div id="recipe-content" hx-swap-oob="true">Grabbing recipe ...</div>'
-    )
-    chat = Chat(model="gpt-4-vision-preview")
-
-    recipe = await chat.chat(ChatMsg(role="user", content=content))
-    await ws.send_text(
-        f"""<div id="recipe-content" hx-swap-oob="true">
-        <div>{markdown(recipe)}</div>
-        <br/>
-        """
-    )
-
-    await ws.send_text('<div id="recipe-from-images-ws" hx-swap-oob="true"</div>')
-
-    await ws.close()
+    return HTMLResponse(HTML.youtube_url_ws.format(url=url))
 
 
 async def recipe_from_youtube(ws: WebSocket) -> None:
+    """Youtube url websocket."""
     url = ws.query_params["youtube-url"]
     await ws.accept()
     # check is valid
     # return a red input box or notification or something
     yt = YouTube(url)
 
-    await ws.send_text(
-        """
-        <input
-          id="youtube-url"
-          name="youtube-url"
-          type="text"
-          class="form-control"
-          placeholder="YouTube url ..."
-          hx-post="/youtube"
-          hx-swap-oob="true"
-        ></input>
-    """
-    )
+    await ws.send_text(HTML.youtube_url_form)
 
     await ws.send_text(
         f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>'
@@ -204,11 +143,65 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     await ws.close()
 
 
+async def images_form(request: Request) -> HTMLResponse:
+    return HTMLResponse(HTML.images_form)
+
+
+async def images(request: Request) -> HTMLResponse:
+    img_paths: list[Path] = []
+    async with request.form() as form:
+        print(form.getlist("images"))
+        for fobj in form.getlist("images"):
+            assert isinstance(fobj, UploadFile)
+            contents = await fobj.read()
+            ext = Path(fobj.filename).suffix if fobj.filename else ".jpeg"
+            print(fobj.filename, ext)
+            img_path = Path(f"{uuid.uuid4().hex}{ext}")
+            with open(img_path, "wb") as f:
+                f.write(contents)
+            img_paths.append(img_path)
+    url = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
+    return HTMLResponse(HTML.youtube_url_ws.format(url=url))
+
+
+async def recipe_from_images(ws: WebSocket) -> None:
+    img_paths = ws.query_params.getlist("images")
+    img_paths = [Path(i) for i in img_paths]
+
+    await ws.accept()
+    # send a blank input back
+    await ws.send_text(HTML.images_ws)
+
+    content: list[Content] = [TextContent(Prompt())]
+    for img_path in img_paths:
+        content.append(ImgContent.from_path(img_path))
+        img_path.unlink()
+
+    await ws.send_text(
+        '<div id="recipe-content" hx-swap-oob="true">Grabbing recipe ...</div>'
+    )
+    chat = Chat(model="gpt-4-vision-preview")
+
+    recipe = await chat.chat(ChatMsg(role="user", content=content))
+    await ws.send_text(
+        f"""<div id="recipe-content" hx-swap-oob="true">
+        <div>{markdown(recipe)}</div>
+        <br/>
+        """
+    )
+
+    await ws.send_text('<div id="recipe-from-images-ws" hx-swap-oob="true"</div>')
+
+    await ws.close()
+
+
 app = Starlette(
     routes=[
         Route("/", homepage),
+        Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
+        Route("/images-input-div", images_form, methods=["GET"]),
         Route("/images", images, methods=["POST"]),
         WebSocketRoute("/recipe-from-images", recipe_from_images),
         Mount("/assets", app=StaticFiles(directory="assets"), name="assets"),
