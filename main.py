@@ -110,19 +110,34 @@ async def recipe_from_description(ws: WebSocket) -> None:
 
 async def webpage_url_form(request: Request) -> HTMLResponse:
     """Div containing the webpage form."""
-    return HTMLResponse(f"{HTML.webpage_url_form}{HTML.empty_recipe_method}")
+    return HTMLResponse(
+        f"""
+        {HTML.webpage_url_form.format(preferences=HTML.preferences)}
+        {HTML.empty_recipe_method}
+        """
+    )
 
 
 async def webpage(request: Request) -> HTMLResponse:
     """Div containing the webpage websocket connection."""
     async with request.form() as form:
         print(form)
+        print(dict(form.items()))
         url = form.get("webpage-url")
         if not isinstance(url, str):
             return HTMLResponse("URL not a string.")
-    url = urlencode({"webpage-url": url})
+    params = urlencode(
+        {
+            "webpage-url": url,
+            "servings": form.get("servings", ""),
+            "time": form.get("time", ""),
+            "vegetarian": form.get("vegetarian", ""),
+            "vegan": form.get("vegan", ""),
+            "gluten": form.get("gluten", ""),
+        }
+    )
     return HTMLResponse(
-        f"{HTML.webpage_url_ws.format(url=url)}{HTML.empty_webpage_url_form}"
+        f"{HTML.webpage_url_ws.format(url=params)}{HTML.empty_webpage_url_form}"
     )
 
 
@@ -145,7 +160,7 @@ async def recipe_from_webpage(ws: WebSocket) -> None:
             f'<div id="recipe-content" hx-swap-oob="true">Could not fetch {url}</div>'
         )
     else:
-        soup = bs4.BeautifulSoup(text)
+        soup = bs4.BeautifulSoup(text, features="html.parser")
         content = soup.text
 
         await ws.send_text(
@@ -158,9 +173,19 @@ async def recipe_from_webpage(ws: WebSocket) -> None:
             """
         )
 
-        prompt = [ChatMsg(role="system", content=Prompt())]
+        prompt = Prompt(
+            servings=float(ws.query_params.get("servings", 4)),
+            time=float(ws.query_params.get("time", 10) or 10),
+            vegetarian=bool(ws.query_params.get("vegetarian")),
+            vegan=bool(ws.query_params.get("vegan")),
+            gluten=bool(ws.query_params.get("gluten")),
+        )
+
+        print(f"###\n{prompt}\n###")
+
+        messages = [ChatMsg(role="system", content=prompt)]
         msg = f"Webpage content: {content}"
-        recipe = await Chat(messages=prompt).chat(msg)
+        recipe = await Chat(messages=messages).chat(msg)
         await ws.send_text(
             f"""<div id="recipe-content" hx-swap-oob="true">
             <div>{markdown(recipe)}</div>
@@ -176,7 +201,12 @@ async def recipe_from_webpage(ws: WebSocket) -> None:
 
 async def youtube_url_form(request: Request) -> HTMLResponse:
     """Div containing the youtube url form."""
-    return HTMLResponse(f"{HTML.youtube_url_form}{HTML.empty_recipe_method}")
+    return HTMLResponse(
+        f"""
+        {HTML.youtube_url_form.format(preferences=HTML.preferences)}
+        {HTML.empty_recipe_method}
+        """
+    )
 
 
 async def youtube(request: Request) -> HTMLResponse:
@@ -186,9 +216,18 @@ async def youtube(request: Request) -> HTMLResponse:
         url = form.get("youtube-url")
     if not isinstance(url, str):
         return HTMLResponse("URL not a string.")
-    url = urlencode({"youtube-url": url})
+    params = urlencode(
+        {
+            "youtube-url": url,
+            "servings": form.get("servings", ""),
+            "time": form.get("time", ""),
+            "vegetarian": form.get("vegetarian", ""),
+            "vegan": form.get("vegan", ""),
+            "gluten": form.get("gluten", ""),
+        }
+    )
     return HTMLResponse(
-        f"{HTML.youtube_url_ws.format(url=url)}{HTML.empty_youtube_url_form}"
+        f"{HTML.youtube_url_ws.format(url=params)}{HTML.empty_youtube_url_form}"
     )
 
 
@@ -234,9 +273,16 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
         </div>
         """
     )
-    prompt = [ChatMsg(role="system", content=Prompt())]
+    prompt = Prompt(
+        servings=float(ws.query_params.get("servings", 4)),
+        time=float(ws.query_params.get("time", 10) or 10),
+        vegetarian=bool(ws.query_params.get("vegetarian")),
+        vegan=bool(ws.query_params.get("vegan")),
+        gluten=bool(ws.query_params.get("gluten")),
+    )
+    messages = [ChatMsg(role="system", content=prompt)]
     msg = f"Transcript: {translation}"
-    recipe = await Chat(messages=prompt).chat(msg)
+    recipe = await Chat(messages=messages).chat(msg)
     await ws.send_text(
         f"""<div id="recipe-content" hx-swap-oob="true">
         <div>{markdown(recipe)}</div>
