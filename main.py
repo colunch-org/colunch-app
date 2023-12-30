@@ -49,14 +49,23 @@ class Html:
         with open(html_dir / "preferences.html") as f:
             self.preferences = f.read()
 
+        with open(html_dir / "empty-recipe-method.html") as f:
+            self.empty_recipe_method = f.read()
+
         with open(html_dir / "youtube-url-div.html") as f:
             self.youtube_url_form = f.read()
+
+        with open(html_dir / "empty-youtube-url-div.html") as f:
+            self.empty_youtube_url_form = f.read()
 
         with open(html_dir / "youtube-url-ws.html") as f:
             self.youtube_url_ws = f.read()
 
         with open(html_dir / "images-div.html") as f:
             self.images_form = f.read()
+
+        with open(html_dir / "empty-images-div.html") as f:
+            self.empty_images_form = f.read()
 
         with open(html_dir / "images-ws.html") as f:
             self.images_ws = f.read()
@@ -71,8 +80,7 @@ async def homepage(request: Request) -> HTMLResponse:
 
 async def youtube_url_form(request: Request) -> HTMLResponse:
     """Div containing the youtube url form."""
-    return HTMLResponse(f'{HTML.youtube_url_form}{'<div id="recipe-method" hx-swap-oob="true"></div>'}')
-
+    return HTMLResponse(f"{HTML.youtube_url_form}{HTML.empty_recipe_method}")
 
 
 async def youtube(request: Request) -> HTMLResponse:
@@ -83,7 +91,9 @@ async def youtube(request: Request) -> HTMLResponse:
     if not isinstance(url, str):
         return HTMLResponse("URL not a string.")
     url = urlencode({"youtube-url": url})
-    return HTMLResponse(f'{HTML.youtube_url_ws.format(url=url)}{'<div id="youtube-url-div" hx-swap-oob="true"></div>'}')
+    return HTMLResponse(
+        f"{HTML.youtube_url_ws.format(url=url)}{HTML.empty_youtube_url_form}"
+    )
 
 
 async def recipe_from_youtube(ws: WebSocket) -> None:
@@ -145,7 +155,7 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
 
 
 async def images_div(request: Request) -> HTMLResponse:
-    return HTMLResponse(f'{HTML.images_form}{'<div id="recipe-method" hx-swap-oob="true"></div>'}')
+    return HTMLResponse(f"{HTML.images_form}{HTML.empty_recipe_method}")
 
 
 async def images(request: Request) -> HTMLResponse:
@@ -162,7 +172,9 @@ async def images(request: Request) -> HTMLResponse:
                 f.write(contents)
             img_paths.append(img_path)
     params = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
-    return HTMLResponse(f'{HTML.images_ws.format(images=params)}{'<div id="images-div" hx-swap-oob="true"></div>'}')
+    return HTMLResponse(
+        f"{HTML.images_ws.format(images=params)}{HTML.empty_images_form}"
+    )
 
 
 async def recipe_from_images(ws: WebSocket) -> None:
