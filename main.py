@@ -4,6 +4,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 import uuid
 
+import bs4
+import httpx
 from markdown2 import (  # pyright: ignore[reportMissingTypeStubs]
     markdown,  # pyright: ignore[reportUnknownVariableType]
 )
@@ -49,6 +51,9 @@ class Html:
         with open(html_dir / "preferences.html") as f:
             self.preferences = f.read()
 
+        with open(html_dir / "recipe-method.html") as f:
+            self.recipe_method = f.read()
+
         with open(html_dir / "empty-recipe-method.html") as f:
             self.empty_recipe_method = f.read()
 
@@ -60,6 +65,15 @@ class Html:
 
         with open(html_dir / "youtube-url-ws.html") as f:
             self.youtube_url_ws = f.read()
+
+        with open(html_dir / "webpage-url-div.html") as f:
+            self.webpage_url_form = f.read()
+
+        with open(html_dir / "empty-webpage-url-div.html") as f:
+            self.empty_webpage_url_form = f.read()
+
+        with open(html_dir / "webpage-url-ws.html") as f:
+            self.webpage_url_ws = f.read()
 
         with open(html_dir / "images-div.html") as f:
             self.images_form = f.read()
@@ -75,7 +89,89 @@ HTML = Html()
 
 
 async def homepage(request: Request) -> HTMLResponse:
-    return HTMLResponse(HTML.index)
+    return HTMLResponse(HTML.index.format(recipe_method=HTML.recipe_method))
+
+
+async def description_form(request: Request) -> HTMLResponse:
+    """Div containing the description form."""
+    ...
+
+
+async def description(request: Request) -> HTMLResponse:
+    """Div containing the description websocket connection."""
+    ...
+
+
+async def recipe_from_description(ws: WebSocket) -> None:
+    await ws.accept()
+
+    await ws.close()
+
+
+async def webpage_url_form(request: Request) -> HTMLResponse:
+    """Div containing the webpage form."""
+    return HTMLResponse(f"{HTML.webpage_url_form}{HTML.empty_recipe_method}")
+
+
+async def webpage(request: Request) -> HTMLResponse:
+    """Div containing the webpage websocket connection."""
+    async with request.form() as form:
+        print(form)
+        url = form.get("webpage-url")
+        if not isinstance(url, str):
+            return HTMLResponse("URL not a string.")
+    url = urlencode({"webpage-url": url})
+    return HTMLResponse(
+        f"{HTML.webpage_url_ws.format(url=url)}{HTML.empty_webpage_url_form}"
+    )
+
+
+async def recipe_from_webpage(ws: WebSocket) -> None:
+    url = ws.query_params["webpage-url"]
+    print(url)
+    content = ""
+    await ws.accept()
+
+    await ws.send_text(
+        f'<div id="recipe-content" hx-swap-oob="true">Grabbing content for {url} ...</div>'
+    )
+    try:
+        resp = await httpx.AsyncClient().get(url)
+        resp.raise_for_status
+        text = resp.text
+    except Exception as e:
+        print(e)
+        await ws.send_text(
+            f'<div id="recipe-content" hx-swap-oob="true">Could not fetch {url}</div>'
+        )
+    else:
+        soup = bs4.BeautifulSoup(text)
+        content = soup.text
+
+        await ws.send_text(
+            f"""
+            <div id="recipe-content" hx-swap-oob="true">
+            <div>Grabbing recipe from the content ...</div>
+            <br/>
+            <div>{content}</div>
+            </div>
+            """
+        )
+
+        prompt = [ChatMsg(role="system", content=Prompt())]
+        msg = f"Webpage content: {content}"
+        recipe = await Chat(messages=prompt).chat(msg)
+        await ws.send_text(
+            f"""<div id="recipe-content" hx-swap-oob="true">
+            <div>{markdown(recipe)}</div>
+            <br/>
+            <div>From the content ...</div>
+            <div>{content}</div>
+            """
+        )
+        await ws.send_text('<div id="recipe-from-webpage-ws" hx-swap-oob="true"></div>')
+
+    await ws.close()
 
 
 async def youtube_url_form(request: Request) -> HTMLResponse:
@@ -104,7 +200,7 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     # return a red input box or notification or something
     yt = YouTube(url)
 
-    await ws.send_text('<div id="youtube-url-div" hx-swap-oob="true"></div>')
+    # await ws.send_text('<div id="youtube-url-div" hx-swap-oob="true"></div>')
 
     await ws.send_text(
         f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>'
@@ -182,7 +278,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
     img_paths = [Path(i) for i in img_paths]
 
     await ws.accept()
-    await ws.send_text('<div id="images-div" hx-swap-oob="true"></div>')
+    # await ws.send_text('<div id="images-div" hx-swap-oob="true"></div>')
 
     content: list[Content] = [TextContent(Prompt())]
     for img_path in img_paths:
@@ -213,6 +309,9 @@ app = Starlette(
         Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
+        Route("/webpage-div", webpage_url_form, methods=["GET"]),
+        Route("/webpage", webpage, methods=["POST"]),
+        WebSocketRoute("/recipe-from-webpage", recipe_from_webpage),
         Route("/images-div", images_div, methods=["GET"]),
         Route("/images", images, methods=["POST"]),
         WebSocketRoute("/recipe-from-images", recipe_from_images),
