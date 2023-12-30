@@ -16,44 +16,38 @@
   <body>
     <div class="container">
       <h2>CoLunch</h2>
-      <div name="recipe-method" hx-swap-oob="true">
-        <div
-          class="card"
-          style="width: 18rem;"
-          hx-post="/recipe-from-description-div"
-        >
+      <div id="recipe-method" hx-swap-oob="true">
+        <div class="card" style="width: 18rem" hx-get="/description-div">
           <div class="card-body">
             <h5 class="card-title">Description</h5>
-            <p class="card-text">Create something delicious from a description.</p>
+            <p class="card-text">
+              Create something delicious from a description.
+            </p>
           </div>
         </div>
-        <div
-          class="card"
-          style="width: 18rem;"
-          hx-post="/recipe-from-youtube-div"
-        >
+        <div class="card" style="width: 18rem" hx-get="/youtube-div">
           <div class="card-body">
             <h5 class="card-title">YouTube</h5>
-            <p class="card-text">Create something delicious from a YouTube video.</p>
+            <p class="card-text">
+              Create something delicious from a YouTube video.
+            </p>
           </div>
         </div>
-        <div
-          class="card"
-          style="width: 18rem;"
-          hx-post="/recipe-from-images-div"
-        >
+        <div class="card" style="width: 18rem" hx-get="/images-div">
           <div class="card-body">
             <h5 class="card-title">Images</h5>
-            <p class="card-text">Create something delicious from one or more images.</p>
+            <p class="card-text">
+              Create something delicious from one or more images.
+            </p>
           </div>
         </div>
       </div>
-      <div name="youtube-url-div" hx-swap-oob="true"></div>
-      <div name="images-div" hx-swap-oob="true"></div>
-      <div name="preferences-div" hx-swap-oob="true"></div>
+      <div id="youtube-url-div" hx-swap-oob="true"></div>
+      <div id="images-div" hx-swap-oob="true"></div>
+      <div id="preferences-div" hx-swap-oob="true"></div>
       <div id="recipe-content" hx-swap-oob="true"></div>
-      <div id="recipe-from-youtube-ws" hx-swap-oob="true"</div>
-      <div id="recipe-from-images-ws" hx-swap-oob="true"</div>
+      <div id="recipe-from-youtube-ws" hx-swap-oob="true"></div>
+      <div id="recipe-from-images-ws" hx-swap-oob="true"></div>
     </div>
 
     <script src="assets/js/htmx.min.js"></script>

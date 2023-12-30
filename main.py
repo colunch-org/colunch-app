@@ -71,7 +71,8 @@ async def homepage(request: Request) -> HTMLResponse:
 
 async def youtube_url_form(request: Request) -> HTMLResponse:
     """Div containing the youtube url form."""
-    return HTMLResponse(HTML.youtube_url_form)
+    return HTMLResponse(f'{HTML.youtube_url_form}{'<div id="recipe-method" hx-swap-oob="true"></div>'}')
+
 
 
 async def youtube(request: Request) -> HTMLResponse:
@@ -82,7 +83,7 @@ async def youtube(request: Request) -> HTMLResponse:
     if not isinstance(url, str):
         return HTMLResponse("URL not a string.")
     url = urlencode({"youtube-url": url})
-    return HTMLResponse(HTML.youtube_url_ws.format(url=url))
+    return HTMLResponse(f'{HTML.youtube_url_ws.format(url=url)}{'<div id="youtube-url-div" hx-swap-oob="true"></div>'}')
 
 
 async def recipe_from_youtube(ws: WebSocket) -> None:
@@ -93,7 +94,7 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
     # return a red input box or notification or something
     yt = YouTube(url)
 
-    await ws.send_text(HTML.youtube_url_form)
+    await ws.send_text('<div id="youtube-url-div" hx-swap-oob="true"></div>')
 
     await ws.send_text(
         f'<div id="recipe-content" hx-swap-oob="true">Grabbing audio for {url} ...</div>'
@@ -138,13 +139,13 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
         <div>{translation}</div>
         """
     )
-    await ws.send_text('<div id="recipe-from-youtube-ws" hx-swap-oob="true"</div>')
+    await ws.send_text('<div id="recipe-from-youtube-ws" hx-swap-oob="true"></div>')
 
     await ws.close()
 
 
-async def images_form(request: Request) -> HTMLResponse:
-    return HTMLResponse(HTML.images_form)
+async def images_div(request: Request) -> HTMLResponse:
+    return HTMLResponse(f'{HTML.images_form}{'<div id="recipe-method" hx-swap-oob="true"></div>'}')
 
 
 async def images(request: Request) -> HTMLResponse:
@@ -160,8 +161,8 @@ async def images(request: Request) -> HTMLResponse:
             with open(img_path, "wb") as f:
                 f.write(contents)
             img_paths.append(img_path)
-    url = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
-    return HTMLResponse(HTML.youtube_url_ws.format(url=url))
+    params = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
+    return HTMLResponse(f'{HTML.images_ws.format(images=params)}{'<div id="images-div" hx-swap-oob="true"></div>'}')
 
 
 async def recipe_from_images(ws: WebSocket) -> None:
@@ -169,8 +170,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
     img_paths = [Path(i) for i in img_paths]
 
     await ws.accept()
-    # send a blank input back
-    await ws.send_text(HTML.images_ws)
+    await ws.send_text('<div id="images-div" hx-swap-oob="true"></div>')
 
     content: list[Content] = [TextContent(Prompt())]
     for img_path in img_paths:
@@ -201,7 +201,7 @@ app = Starlette(
         Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
-        Route("/images-input-div", images_form, methods=["GET"]),
+        Route("/images-div", images_div, methods=["GET"]),
         Route("/images", images, methods=["POST"]),
         WebSocketRoute("/recipe-from-images", recipe_from_images),
         Mount("/assets", app=StaticFiles(directory="assets"), name="assets"),
