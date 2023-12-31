@@ -1,0 +1,16 @@
+<div id="webpage-url-div" hx-swap-oob="true">
+  <form>
+    <input
+      id="webpage-url"
+      name="webpage-url"
+      type="text"
+      class="form-control"
+      placeholder="Webpage url ..."
+    ></input>
+    {preferences}
+    <input
+      type="submit"
+      hx-post="/webpage"
+    ></input>
+  </form>
+</div>

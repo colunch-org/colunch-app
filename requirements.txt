@@ -1,0 +1,9 @@
+beautifulsoup4
+httpx
+markdown2
+pydantic-settings
+python-multipart
+pytube
+rich
+starlette
+uvicorn[standard]
