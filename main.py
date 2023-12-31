@@ -11,6 +11,7 @@ from markdown2 import (  # pyright: ignore[reportMissingTypeStubs]
 )
 from pydantic_settings import BaseSettings
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
+from rich import print
 from starlette.applications import Starlette
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
@@ -20,7 +21,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
 from aopenai import AudioTranslation, Chat, ChatMsg, Content, ImgContent, TextContent
-from prompts import Prompt
+from prompts import CreateRecipePrompt
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
@@ -173,22 +174,15 @@ async def recipe_from_webpage(ws: WebSocket) -> None:
             """
         )
 
-        prompt = Prompt(
-            servings=float(ws.query_params.get("servings", 4)),
-            time=float(ws.query_params.get("time", 10) or 10),
-            vegetarian=bool(ws.query_params.get("vegetarian")),
-            vegan=bool(ws.query_params.get("vegan")),
-            gluten=bool(ws.query_params.get("gluten")),
-        )
-
-        print(f"###\n{prompt}\n###")
+        prompt = CreateRecipePrompt()
 
         messages = [ChatMsg(role="system", content=prompt)]
         msg = f"Webpage content: {content}"
         recipe = await Chat(messages=messages).chat(msg)
+        print(recipe)
         await ws.send_text(
             f"""<div id="recipe-content" hx-swap-oob="true">
-            <div>{markdown(recipe)}</div>
+            <div>{markdown(recipe, extras=["tables"])}</div>
             <br/>
             <div>From the content ...</div>
             <div>{content}</div>
@@ -273,19 +267,13 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
         </div>
         """
     )
-    prompt = Prompt(
-        servings=float(ws.query_params.get("servings", 4)),
-        time=float(ws.query_params.get("time", 10) or 10),
-        vegetarian=bool(ws.query_params.get("vegetarian")),
-        vegan=bool(ws.query_params.get("vegan")),
-        gluten=bool(ws.query_params.get("gluten")),
-    )
+    prompt = CreateRecipePrompt()
     messages = [ChatMsg(role="system", content=prompt)]
     msg = f"Transcript: {translation}"
     recipe = await Chat(messages=messages).chat(msg)
     await ws.send_text(
         f"""<div id="recipe-content" hx-swap-oob="true">
-        <div>{markdown(recipe)}</div>
+        <div>{markdown(recipe, extras=["tables"])}</div>
         <br/>
         <div>From the transcript ...</div>
         <div>{translation}</div>
@@ -326,7 +314,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
     await ws.accept()
     # await ws.send_text('<div id="images-div" hx-swap-oob="true"></div>')
 
-    content: list[Content] = [TextContent(Prompt())]
+    content: list[Content] = [TextContent(CreateRecipePrompt())]
     for img_path in img_paths:
         content.append(ImgContent.from_path(img_path))
         img_path.unlink()
@@ -339,7 +327,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
     recipe = await chat.chat(ChatMsg(role="user", content=content))
     await ws.send_text(
         f"""<div id="recipe-content" hx-swap-oob="true">
-        <div>{markdown(recipe)}</div>
+        <div>{markdown(recipe, extras=["tables"])}</div>
         <br/>
         """
     )

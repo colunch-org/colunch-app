@@ -8,7 +8,7 @@ from typing import Any, Protocol, Self
 
 import httpx
 
-from prompts import Prompt
+from prompts import CreateRecipePrompt
 
 
 OPENAI_TOKEN = os.environ.get("OPENAI_API_KEY")
@@ -56,7 +56,7 @@ class ContentType(Enum):
 class TextContent:
     type = ContentType.text
 
-    def __init__(self, text: str | Prompt) -> None:
+    def __init__(self, text: str | CreateRecipePrompt) -> None:
         self.text = str(text)
 
     def to_dict(self) -> dict[str, Any]:
@@ -80,14 +80,16 @@ class ImgContent:
 
 
 class ChatMsg:
-    def __init__(self, *, role: str, content: str | list[Content] | Prompt) -> None:
+    def __init__(
+        self, *, role: str, content: str | list[Content] | CreateRecipePrompt
+    ) -> None:
         self.role = role
         self.content = content
 
     def to_dict(self) -> dict[str, Any]:
         content = (
             str(self.content)
-            if isinstance(self.content, (str, Prompt))
+            if isinstance(self.content, (str, CreateRecipePrompt))
             else [c.to_dict() for c in self.content]
         )
         return {"role": self.role, "content": content}
