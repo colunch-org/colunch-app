@@ -10,6 +10,6 @@ COPY requirements.txt ./
 RUN python -m pip install -r requirements.txt
 
 COPY assets ./assets
-COPY main.py aopenai.py prompts.py ./
+COPY *.py ./
 
 CMD uvicorn main:app --host $COLUNCH_HOST --port $COLUNCH_PORT
