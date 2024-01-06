@@ -1,3 +1,0 @@
-runtime: python312
-
-entrypoint: uvicorn --port $PORT main:app
