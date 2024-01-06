@@ -1,34 +1,14 @@
-<!doctype html>
+{% extends "base.html" %} {% block content %} {{ recipe_method }} {{ recipes }}
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CoLunch</title>
-    <link rel="stylesheet" href="assets/css/bootstrap.min.css" />
-    <link
-      id="favicon"
-      rel="icon"
-      type="image/x-icon"
-      href="assets/img/favicon.ico"
-    />
-  </head>
+<div id="youtube-url-div" hx-swap-oob="true"></div>
+<div id="webpage-url-div" hx-swap-oob="true"></div>
+<div id="images-div" hx-swap-oob="true"></div>
+<div id="recipe-content" hx-swap-oob="true"></div>
+<div id="recipe-from-youtube-ws" hx-swap-oob="true"></div>
+<div id="recipe-from-webpage-ws" hx-swap-oob="true"></div>
+<div id="recipe-from-images-ws" hx-swap-oob="true"></div>
 
-  <body>
-    <div class="container">
-      <h2>CoLunch</h2>
-      {recipe_method} {recipes}
-      <div id="youtube-url-div" hx-swap-oob="true"></div>
-      <div id="webpage-url-div" hx-swap-oob="true"></div>
-      <div id="images-div" hx-swap-oob="true"></div>
-      <div id="recipe-content" hx-swap-oob="true"></div>
-      <div id="recipe-from-youtube-ws" hx-swap-oob="true"></div>
-      <div id="recipe-from-webpage-ws" hx-swap-oob="true"></div>
-      <div id="recipe-from-images-ws" hx-swap-oob="true"></div>
-    </div>
-
-    <script src="assets/js/htmx.min.js"></script>
-    <script src="assets/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/htmx-ws.js"></script>
-  </body>
-</html>
+{% endblock %} {% block scripts %}
+<script src="assets/js/htmx.min.js"></script>
+<script src="assets/js/htmx-ws.js"></script>
+{% endblock %}

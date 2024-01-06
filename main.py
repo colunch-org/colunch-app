@@ -3,6 +3,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 import uuid
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 from rich import print
 from starlette.applications import Starlette
 from starlette.datastructures import UploadFile
@@ -14,7 +16,6 @@ from starlette.websockets import WebSocket
 
 import config
 import db
-import html_templates as html
 import services
 
 
@@ -25,7 +26,13 @@ import services
 CONFIG = config.Config()
 
 
-HTML = html.Html()
+# Async?
+# Looks like we cache stuff
+# Can always copy this, subclass BaseLoader, and make it do what I want.
+TEMPLATES = Environment(
+    loader=FileSystemLoader(CONFIG.html_dir),
+    autoescape=select_autoescape(),
+)
 
 
 @contextlib.asynccontextmanager
@@ -44,15 +51,13 @@ async def lifespan(app: Starlette):
 
 async def homepage(request: Request) -> HTMLResponse:
     recipes = await db.RecipesRepository(db.db).list()
-    recipes_html = "<ul>"
-    for recipe in recipes:
-        print(recipe.name)
-        recipes_html += f'<li><a href="/recipes/{recipe.id}">{recipe.name}</a></li>'
-    recipes_html += "</ul>"
+    index = TEMPLATES.get_template("index.html")
+    recipe_list = TEMPLATES.get_template("recipe-list.html")
+    recipe_method = TEMPLATES.get_template("recipe-method.html")
     return HTMLResponse(
-        HTML.index.format(
-            recipe_method=HTML.recipe_method,
-            recipes=recipes_html,
+        index.render(
+            recipe_method=Markup(recipe_method.render()),
+            recipes=Markup(recipe_list.render(recipes=recipes)),
         )
     )
 
@@ -64,7 +69,13 @@ async def favicon(request: Request) -> FileResponse:
 async def recipe_detail(request: Request) -> HTMLResponse:
     id = request.path_params["id"]
     recipe = await db.RecipesRepository(db.db).get(id)
-    return HTMLResponse(recipe.html)
+    recipe_detail = TEMPLATES.get_template("recipe-detail.html")
+    return HTMLResponse(
+        recipe_detail.render(
+            title=recipe.name,
+            text=Markup(recipe.html),
+        )
+    )
 
 
 async def description_form(request: Request) -> HTMLResponse:
