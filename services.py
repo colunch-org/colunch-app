@@ -87,7 +87,7 @@ async def recipe_from_webpage_text(text: str) -> Recipe:
 
 
 async def recipe_name(text: str) -> str:
-    return await Chat(model="gpt-3.5-turbo").chat(
+    return await Chat(model="gpt-4").chat(
         "Can you create an informative, accurate, but concise name for this recipe? "
         f"Respond with only the name. Recipe: {text}"
     )
