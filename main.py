@@ -31,21 +31,36 @@ HTML = html.Html()
 @contextlib.asynccontextmanager
 async def lifespan(app: Starlette):
     await db.db.connect()
-    await db.create_db()
+    try:
+        await db.create_db()
+    except:
+        print("Could not create DB.")
     yield
     await db.db.disconnect()
-    await db.db.execute(  # pyright: ignore[reportUnknownMemberType]
-        "DROP TABLE Recipes"
-    )
+    # await db.db.execute(  # pyright: ignore[reportUnknownMemberType]
+    #     "DROP TABLE Recipes"
+    # )
 
 
 async def homepage(request: Request) -> HTMLResponse:
-    results = await db.db.fetch_all(  # pyright: ignore[reportUnknownMemberType]
-        "SELECT * FROM Recipes"
+    recipes = await db.RecipesRepository(db.db).list()
+    recipes_html = "<ul>"
+    for recipe in recipes:
+        print(recipe)
+        recipes_html += f'<li><a href="/recipes/{recipe.id}">{recipe.name}</a></li>'
+    recipes_html += "</ul>"
+    return HTMLResponse(
+        HTML.index.format(
+            recipe_method=HTML.recipe_method,
+            recipes=recipes_html,
+        )
     )
-    for recipe in results:
-        print(recipe["id"], recipe["text"][:25])
-    return HTMLResponse(HTML.index.format(recipe_method=HTML.recipe_method))
+
+
+async def recipe_detail(request: Request) -> HTMLResponse:
+    id = request.path_params["id"]
+    recipe = await db.RecipesRepository(db.db).get(id)
+    return HTMLResponse(recipe.html)
 
 
 async def description_form(request: Request) -> HTMLResponse:
@@ -97,7 +112,7 @@ async def recipe_from_webpage(ws: WebSocket) -> None:
     try:
         content = await services.text_from_webpage(url)
     except Exception as e:
-        print(e)
+        print(repr(e))
         await ws.send_text(
             f'<div id="recipe-content" hx-swap-oob="true">Could not fetch {url}</div>'
         )
@@ -244,6 +259,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
 app = Starlette(
     routes=[
         Route("/", homepage),
+        Route("/recipes/{id:str}", recipe_detail),
         Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
