@@ -7,7 +7,7 @@ from rich import print
 from starlette.applications import Starlette
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import FileResponse, HTMLResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
@@ -46,7 +46,7 @@ async def homepage(request: Request) -> HTMLResponse:
     recipes = await db.RecipesRepository(db.db).list()
     recipes_html = "<ul>"
     for recipe in recipes:
-        print(recipe)
+        print(recipe.name)
         recipes_html += f'<li><a href="/recipes/{recipe.id}">{recipe.name}</a></li>'
     recipes_html += "</ul>"
     return HTMLResponse(
@@ -55,6 +55,10 @@ async def homepage(request: Request) -> HTMLResponse:
             recipes=recipes_html,
         )
     )
+
+
+async def favicon(request: Request) -> FileResponse:
+    return FileResponse(CONFIG.images_dir / "favicon.ico")
 
 
 async def recipe_detail(request: Request) -> HTMLResponse:
@@ -259,6 +263,7 @@ async def recipe_from_images(ws: WebSocket) -> None:
 app = Starlette(
     routes=[
         Route("/", homepage),
+        Route("/favicon.ico", favicon),
         Route("/recipes/{id:str}", recipe_detail),
         Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
