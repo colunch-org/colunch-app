@@ -192,8 +192,8 @@ async def youtube_url_form(request: Request) -> HTMLResponse:
     """Div containing the youtube url form."""
     return HTMLResponse(
         f"""
-        {HTML.youtube_url_form.format(preferences=HTML.preferences)}
-        {HTML.empty_recipe_method}
+        {TEMPLATES.get_template('youtube-url-div.html').render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
         """
     )
 
@@ -205,18 +205,12 @@ async def youtube(request: Request) -> HTMLResponse:
         url = form.get("youtube-url")
     if not isinstance(url, str):
         return HTMLResponse("URL not a string.")
-    params = urlencode(
-        {
-            "youtube-url": url,
-            "servings": form.get("servings", ""),
-            "time": form.get("time", ""),
-            "vegetarian": form.get("vegetarian", ""),
-            "vegan": form.get("vegan", ""),
-            "gluten": form.get("gluten", ""),
-        }
-    )
+    query_params = urlencode({"youtube-url": url})
     return HTMLResponse(
-        f"{HTML.youtube_url_ws.format(url=params)}{HTML.empty_youtube_url_form}"
+        f"""
+        {TEMPLATES.get_template("youtube-url-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-youtube-url-div.html").render()}
+    """
     )
 
 
@@ -261,7 +255,12 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
 
 
 async def images_div(request: Request) -> HTMLResponse:
-    return HTMLResponse(f"{HTML.images_form}{HTML.empty_recipe_method}")
+    return HTMLResponse(
+        f"""
+        {TEMPLATES.get_template("images-div.html").render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
+        """
+    )
 
 
 async def images(request: Request) -> HTMLResponse:
@@ -275,9 +274,12 @@ async def images(request: Request) -> HTMLResponse:
             with open(img_path, "wb") as f:
                 f.write(contents)
             img_paths.append(img_path)
-    params = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
+    query_params = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
     return HTMLResponse(
-        f"{HTML.images_ws.format(images=params)}{HTML.empty_images_form}"
+        f"""
+        {TEMPLATES.get_template("images-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-images-div.html")}
+        """
     )
 
 
