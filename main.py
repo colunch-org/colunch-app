@@ -3,18 +3,19 @@ from pathlib import Path
 from urllib.parse import urlencode
 import uuid
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 from rich import print
 from starlette.applications import Starlette
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import FileResponse, HTMLResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
 import config
 import db
-import html_templates as html
 import services
 
 
@@ -25,7 +26,13 @@ import services
 CONFIG = config.Config()
 
 
-HTML = html.Html()
+# Async?
+# Looks like we cache stuff
+# Can always copy this, subclass BaseLoader, and make it do what I want.
+TEMPLATES = Environment(
+    loader=FileSystemLoader(CONFIG.html_dir),
+    autoescape=select_autoescape(),
+)
 
 
 @contextlib.asynccontextmanager
@@ -44,37 +51,74 @@ async def lifespan(app: Starlette):
 
 async def homepage(request: Request) -> HTMLResponse:
     recipes = await db.RecipesRepository(db.db).list()
-    recipes_html = "<ul>"
-    for recipe in recipes:
-        print(recipe)
-        recipes_html += f'<li><a href="/recipes/{recipe.id}">{recipe.name}</a></li>'
-    recipes_html += "</ul>"
+    index = TEMPLATES.get_template("index.html")
+    recipe_list = TEMPLATES.get_template("recipe-list.html")
+    recipe_method = TEMPLATES.get_template("recipe-method.html")
     return HTMLResponse(
-        HTML.index.format(
-            recipe_method=HTML.recipe_method,
-            recipes=recipes_html,
+        index.render(
+            recipe_method=Markup(recipe_method.render()),
+            recipes=Markup(recipe_list.render(recipes=recipes)),
         )
     )
+
+
+async def favicon(request: Request) -> FileResponse:
+    return FileResponse(CONFIG.images_dir / "favicon.ico")
 
 
 async def recipe_detail(request: Request) -> HTMLResponse:
     id = request.path_params["id"]
     recipe = await db.RecipesRepository(db.db).get(id)
-    return HTMLResponse(recipe.html)
+    recipe_detail = TEMPLATES.get_template("recipe-detail.html")
+    return HTMLResponse(
+        recipe_detail.render(
+            title=recipe.name,
+            text=Markup(recipe.html),
+        )
+    )
 
 
 async def description_form(request: Request) -> HTMLResponse:
     """Div containing the description form."""
-    ...
+    return HTMLResponse(
+        f"""
+        {TEMPLATES.get_template("description-div.html").render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
+        """
+    )
 
 
 async def description(request: Request) -> HTMLResponse:
     """Div containing the description websocket connection."""
-    ...
+    async with request.form() as form:
+        query_params = form.get("description")
+        if not isinstance(query_params, str):
+            return HTMLResponse("Description not a string.")
+    query_params = urlencode({"description": query_params})
+    return HTMLResponse(
+        f"""
+        {TEMPLATES.get_template("description-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-description-div.html").render()}
+    """
+    )
 
 
 async def recipe_from_description(ws: WebSocket) -> None:
+    description = ws.query_params["description"]
     await ws.accept()
+    await ws.send_text(
+        f'<div id="recipe-content" hx-swap-oob="true">Grabbing recipe for "{description}" ...</div>'
+    )
+    recipe = await services.recipe_from_description(description)
+    await ws.send_text(
+        f"""<div id="recipe-content" hx-swap-oob="true">
+        <div>{recipe.html}</div>
+        <br/>
+        <div>From the description ...</div>
+        <div>{description}</div>
+        """
+    )
+    await ws.send_text('<div id="recipe-from-webpage-ws" hx-swap-oob="true"></div>')
 
     await ws.close()
 
@@ -83,8 +127,8 @@ async def webpage_url_form(request: Request) -> HTMLResponse:
     """Div containing the webpage form."""
     return HTMLResponse(
         f"""
-        {HTML.webpage_url_form.format(preferences=HTML.preferences)}
-        {HTML.empty_recipe_method}
+        {TEMPLATES.get_template("webpage-url-div.html").render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
         """
     )
 
@@ -92,12 +136,15 @@ async def webpage_url_form(request: Request) -> HTMLResponse:
 async def webpage(request: Request) -> HTMLResponse:
     """Div containing the webpage websocket connection."""
     async with request.form() as form:
-        url = form.get("webpage-url")
-        if not isinstance(url, str):
+        query_params = form.get("webpage-url")
+        if not isinstance(query_params, str):
             return HTMLResponse("URL not a string.")
-    params = urlencode({"webpage-url": url})
+    query_params = urlencode({"webpage-url": query_params})
     return HTMLResponse(
-        f"{HTML.webpage_url_ws.format(url=params)}{HTML.empty_webpage_url_form}"
+        f"""
+        {TEMPLATES.get_template("webpage-url-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-webpage-url-div.html").render()}
+    """
     )
 
 
@@ -145,8 +192,8 @@ async def youtube_url_form(request: Request) -> HTMLResponse:
     """Div containing the youtube url form."""
     return HTMLResponse(
         f"""
-        {HTML.youtube_url_form.format(preferences=HTML.preferences)}
-        {HTML.empty_recipe_method}
+        {TEMPLATES.get_template('youtube-url-div.html').render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
         """
     )
 
@@ -158,18 +205,12 @@ async def youtube(request: Request) -> HTMLResponse:
         url = form.get("youtube-url")
     if not isinstance(url, str):
         return HTMLResponse("URL not a string.")
-    params = urlencode(
-        {
-            "youtube-url": url,
-            "servings": form.get("servings", ""),
-            "time": form.get("time", ""),
-            "vegetarian": form.get("vegetarian", ""),
-            "vegan": form.get("vegan", ""),
-            "gluten": form.get("gluten", ""),
-        }
-    )
+    query_params = urlencode({"youtube-url": url})
     return HTMLResponse(
-        f"{HTML.youtube_url_ws.format(url=params)}{HTML.empty_youtube_url_form}"
+        f"""
+        {TEMPLATES.get_template("youtube-url-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-youtube-url-div.html").render()}
+    """
     )
 
 
@@ -214,7 +255,12 @@ async def recipe_from_youtube(ws: WebSocket) -> None:
 
 
 async def images_div(request: Request) -> HTMLResponse:
-    return HTMLResponse(f"{HTML.images_form}{HTML.empty_recipe_method}")
+    return HTMLResponse(
+        f"""
+        {TEMPLATES.get_template("images-div.html").render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
+        """
+    )
 
 
 async def images(request: Request) -> HTMLResponse:
@@ -228,9 +274,12 @@ async def images(request: Request) -> HTMLResponse:
             with open(img_path, "wb") as f:
                 f.write(contents)
             img_paths.append(img_path)
-    params = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
+    query_params = urlencode({"images": [str(i) for i in img_paths]}, doseq=True)
     return HTMLResponse(
-        f"{HTML.images_ws.format(images=params)}{HTML.empty_images_form}"
+        f"""
+        {TEMPLATES.get_template("images-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-images-div.html")}
+        """
     )
 
 
@@ -259,7 +308,11 @@ async def recipe_from_images(ws: WebSocket) -> None:
 app = Starlette(
     routes=[
         Route("/", homepage),
+        Route("/favicon.ico", favicon),
         Route("/recipes/{id:str}", recipe_detail),
+        Route("/description-div", description_form),
+        Route("/description", description, methods=["POST"]),
+        WebSocketRoute("/recipe-from-description", recipe_from_description),
         Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),

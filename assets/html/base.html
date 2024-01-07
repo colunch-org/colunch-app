@@ -1,0 +1,38 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}CoLunch{% endblock %}</title>
+    <link rel="stylesheet" href="/assets/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/assets/css/bootstrap.min.css.map" />
+    <link
+      id="favicon"
+      rel="icon"
+      type="image/x-icon"
+      href="/assets/img/favicon.ico"
+    />
+  </head>
+
+  <body>
+    <div class="container">
+      <nav class="navbar navbar-light bg-light">
+        <a class="navbar-brand" href="/">
+          <img
+            src="/assets/img/favicon-32x32.png"
+            width="30"
+            height="30"
+            class="d-inline-block align-top"
+            alt=""
+          />
+          CoLunch
+        </a>
+      </nav>
+      {% block content %} {% endblock %}
+    </div>
+    <script src="/assets/js/bootstrap.bundle.min.js"></script>
+    <script src="/assets/js/bootstrap.bundle.min.js.map"></script>
+    {% block scripts %} {% endblock %}
+  </body>
+</html>

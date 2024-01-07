@@ -19,6 +19,16 @@ from prompts import CreateRecipePrompt
 CONFIG = config.Config()
 
 
+async def recipe_from_description(text: str) -> Recipe:
+    prompt = CreateRecipePrompt()
+    messages = [ChatMsg(role="system", content=prompt)]
+    msg = f"Description: {text}"
+    text = await Chat(model=CONFIG.core_model, messages=messages).chat(msg)
+    name = await recipe_name(text)
+    recipe = await db.RecipesRepository(db.db).create(text=text, name=name)
+    return recipe
+
+
 async def recipe_from_images(img_paths: Iterable[Path]) -> Recipe:
     content: list[Content] = [TextContent(CreateRecipePrompt())]
     for img_path in img_paths:

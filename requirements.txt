@@ -1,6 +1,7 @@
 beautifulsoup4
 databases[aiosqlite]
 httpx
+Jinja2
 markdown2
 pydantic-settings
 python-multipart
