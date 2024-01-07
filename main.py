@@ -80,16 +80,45 @@ async def recipe_detail(request: Request) -> HTMLResponse:
 
 async def description_form(request: Request) -> HTMLResponse:
     """Div containing the description form."""
-    ...
+    return HTMLResponse(
+        f"""
+        {TEMPLATES.get_template("description-div.html").render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
+        """
+    )
 
 
 async def description(request: Request) -> HTMLResponse:
     """Div containing the description websocket connection."""
-    ...
+    async with request.form() as form:
+        query_params = form.get("description")
+        if not isinstance(query_params, str):
+            return HTMLResponse("Description not a string.")
+    query_params = urlencode({"description": query_params})
+    return HTMLResponse(
+        f"""
+        {TEMPLATES.get_template("description-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-description-div.html").render()}
+    """
+    )
 
 
 async def recipe_from_description(ws: WebSocket) -> None:
+    description = ws.query_params["description"]
     await ws.accept()
+    await ws.send_text(
+        f'<div id="recipe-content" hx-swap-oob="true">Grabbing recipe for "{description}" ...</div>'
+    )
+    recipe = await services.recipe_from_description(description)
+    await ws.send_text(
+        f"""<div id="recipe-content" hx-swap-oob="true">
+        <div>{recipe.html}</div>
+        <br/>
+        <div>From the description ...</div>
+        <div>{description}</div>
+        """
+    )
+    await ws.send_text('<div id="recipe-from-webpage-ws" hx-swap-oob="true"></div>')
 
     await ws.close()
 
@@ -98,8 +127,8 @@ async def webpage_url_form(request: Request) -> HTMLResponse:
     """Div containing the webpage form."""
     return HTMLResponse(
         f"""
-        {HTML.webpage_url_form.format(preferences=HTML.preferences)}
-        {HTML.empty_recipe_method}
+        {TEMPLATES.get_template("webpage-url-div.html").render()}
+        {TEMPLATES.get_template("empty-recipe-method.html").render()}
         """
     )
 
@@ -107,12 +136,15 @@ async def webpage_url_form(request: Request) -> HTMLResponse:
 async def webpage(request: Request) -> HTMLResponse:
     """Div containing the webpage websocket connection."""
     async with request.form() as form:
-        url = form.get("webpage-url")
-        if not isinstance(url, str):
+        query_params = form.get("webpage-url")
+        if not isinstance(query_params, str):
             return HTMLResponse("URL not a string.")
-    params = urlencode({"webpage-url": url})
+    query_params = urlencode({"webpage-url": query_params})
     return HTMLResponse(
-        f"{HTML.webpage_url_ws.format(url=params)}{HTML.empty_webpage_url_form}"
+        f"""
+        {TEMPLATES.get_template("webpage-url-ws.html").render(query_params=query_params)}
+        {TEMPLATES.get_template("empty-webpage-url-div.html").render()}
+    """
     )
 
 
@@ -276,6 +308,9 @@ app = Starlette(
         Route("/", homepage),
         Route("/favicon.ico", favicon),
         Route("/recipes/{id:str}", recipe_detail),
+        Route("/description-div", description_form),
+        Route("/description", description, methods=["POST"]),
+        WebSocketRoute("/recipe-from-description", recipe_from_description),
         Route("/youtube-div", youtube_url_form, methods=["GET"]),
         Route("/youtube", youtube, methods=["POST"]),
         WebSocketRoute("/recipe-from-youtube", recipe_from_youtube),
