@@ -1,10 +1,10 @@
 from jinja2 import Environment
+from markdown2 import (  # pyright: ignore[reportMissingTypeStubs]
+    markdown,  # pyright: ignore[reportUnknownVariableType]
+)
 from markupsafe import Markup
 
 from app.domain.models import Recipe
-
-
-recipe_detail = TEMPLATES.get_template("recipe-detail.html")
 
 
 class RecipeDetail:
@@ -19,8 +19,13 @@ class RecipeDetail:
         self.env = environment
         self.name = template_name
 
-    def html(self) -> str:
-        return self.env.get_template(self.name).render(
-            title=self.recipe.name,
-            text=Markup(recipe.html),
-        )
+    @property
+    def title(self) -> str:
+        return self.recipe.name
+
+    @property
+    def content(self) -> str:
+        return Markup(markdown(self.recipe.text))
+
+    def render(self) -> str:
+        return self.env.get_template(self.name).render(recipe=self)

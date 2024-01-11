@@ -1,5 +1,7 @@
 import contextlib
+import functools
 from pathlib import Path
+from typing import Any, Awaitable, Callable
 from urllib.parse import urlencode
 import uuid
 
@@ -19,6 +21,7 @@ from app import (
     db,
     services,
 )
+from app.html.recipe_detail import RecipeDetail
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
@@ -51,16 +54,28 @@ async def lifespan(app: Starlette):
     # )
 
 
-async def homepage(request: Request) -> HTMLResponse:
+def aHTMLResponse(route: Callable[..., Awaitable[str | tuple[str, int]]]):
+    @functools.wraps(route)
+    async def wrapper(*args: Any, **kwargs: Any) -> HTMLResponse:
+        resp = await route(*args, **kwargs)
+        if not isinstance(resp, tuple):
+            html, code = resp, 200
+        else:
+            html, code = resp
+        return HTMLResponse(html, status_code=code)
+
+    return wrapper
+
+
+@aHTMLResponse
+async def homepage(request: Request) -> str:
     recipes = await db.RecipesRepository(db.db).list()
     index = TEMPLATES.get_template("index.html")
     recipe_list = TEMPLATES.get_template("recipe-list.html")
     recipe_method = TEMPLATES.get_template("recipe-method.html")
-    return HTMLResponse(
-        index.render(
-            recipe_method=Markup(recipe_method.render()),
-            recipes=Markup(recipe_list.render(recipes=recipes)),
-        )
+    return index.render(
+        recipe_method=Markup(recipe_method.render()),
+        recipes=Markup(recipe_list.render(recipes=recipes)),
     )
 
 
@@ -68,16 +83,12 @@ async def favicon(request: Request) -> FileResponse:
     return FileResponse(CONFIG.images_dir / "favicon.ico")
 
 
-async def recipe_detail(request: Request) -> HTMLResponse:
-    id = request.path_params["id"]
-    recipe = await db.RecipesRepository(db.db).get(id)
-    recipe_detail = TEMPLATES.get_template("recipe-detail.html")
-    return HTMLResponse(
-        recipe_detail.render(
-            title=recipe.name,
-            text=Markup(recipe.html),
-        )
-    )
+@aHTMLResponse
+async def recipe_detail(request: Request) -> str:
+    return RecipeDetail(
+        await db.RecipesRepository(db.db).get(request.path_params["id"]),
+        environment=TEMPLATES,
+    ).render()
 
 
 async def description_form(request: Request) -> HTMLResponse:
