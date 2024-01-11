@@ -2,8 +2,8 @@ from uuid import uuid4
 from databases import Database
 from databases.interfaces import Record
 
-import config
-from models import Recipe
+from app import config
+from app.domain.models import Recipe
 
 
 CONFIG = config.Config()

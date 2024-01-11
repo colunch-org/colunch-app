@@ -8,11 +8,12 @@ from typing import Any, Protocol, Self
 
 import httpx
 
-from prompts import CreateRecipePrompt
+from app.domain.prompts import CreateRecipePrompt
 
 
 OPENAI_TOKEN = os.environ.get("OPENAI_API_KEY")
 MAX_TOKENS = 3000
+TIMEOUT = 60 * 2
 
 
 def openai_client(token: str | None = None) -> httpx.AsyncClient:
@@ -23,7 +24,7 @@ def openai_client(token: str | None = None) -> httpx.AsyncClient:
             "Authorization": f"Bearer {OPENAI_TOKEN}",
             "OpenAI-Beta": "assistants=v1",
         },
-        timeout=60 * 2,
+        timeout=TIMEOUT,
     )
 
 
@@ -34,12 +35,7 @@ def encode_image(image_path: Path | str):
 
 system_msg = {
     "role": "system",
-    "content": (
-        "You are a helpful assistant."
-        # " who gives answers in a format consistent with GitHub flavour markdown. "
-        # "Do not tell me the answer is consistent with GitHub flavour markdown and "
-        # "do not include the ``` fences."
-    ),
+    "content": "You are a helpful assistant.",
 }
 
 

@@ -9,11 +9,17 @@ import bs4
 import httpx
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
-from aopenai import AudioTranslation, Chat, ChatMsg, Content, ImgContent, TextContent
-import config
-import db
-from models import Recipe
-from prompts import CreateRecipePrompt
+from app import config, db
+from app.domain.aopenai import (
+    AudioTranslation,
+    Chat,
+    ChatMsg,
+    Content,
+    ImgContent,
+    TextContent,
+)
+from app.domain.models import Recipe
+from app.domain.prompts import CreateRecipePrompt
 
 
 CONFIG = config.Config()
@@ -99,5 +105,6 @@ async def recipe_from_webpage_text(text: str) -> Recipe:
 async def recipe_name(text: str) -> str:
     return await Chat(model="gpt-4").chat(
         "Can you create an informative, accurate, but concise name for this recipe? "
+        "Do not include quotation marks. "
         f"Respond with only the name. Recipe: {text}"
     )

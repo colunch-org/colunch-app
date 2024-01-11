@@ -14,9 +14,11 @@ from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
-import config
-import db
-import services
+from app import (
+    config,
+    db,
+    services,
+)
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
