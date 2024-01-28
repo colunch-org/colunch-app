@@ -3,6 +3,7 @@ databases[aiosqlite]
 httpx
 Jinja2
 markdown2
+openai
 pydantic-settings
 python-multipart
 pytube

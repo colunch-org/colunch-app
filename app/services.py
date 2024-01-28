@@ -10,7 +10,7 @@ import httpx
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
 from app import config, db
-from app.domain.aopenai import (
+from domain.aopenai import (
     AudioTranslation,
     Chat,
     ChatMsg,
@@ -18,8 +18,8 @@ from app.domain.aopenai import (
     ImgContent,
     TextContent,
 )
-from app.domain.models import Recipe
-from app.domain.prompts import CreateRecipePrompt
+from domain.models import Recipe
+from domain.prompts import CreateRecipePrompt
 
 
 CONFIG = config.Config()
