@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import os
 from pathlib import Path
 from typing import Any, Protocol
 import uuid
@@ -43,12 +44,18 @@ async def parse_links(description: UserDescription) -> list[Url]:
                 "role": "user",
                 "content": (
                     "Please provide all the links in this text, separated by commas. "
-                    f"Include only the links in your response. Text: {description}"
+                    "Include only the links in your response. "
+                    "If there are no links return <NULL>. "
+                    f"Text: {description}"
                 ),
             }
         ],
     )
-    return (resp.choices[0].message.content or "").strip().split(",")
+    return [
+        l.strip()
+        for l in (resp.choices[0].message.content or "").split(",")
+        if l.lower() != "<null>"
+    ]
 
 
 async def parse_part_description(description: UserDescription) -> PartDescription:
@@ -117,22 +124,36 @@ async def create_recipe_from_text_and_images(
     description: UserDescription,
     images: list[io.BytesIO],
 ) -> RecipeContent:
-    # don't forget the prompt
+    if not (description or images):
+        raise ValueError("Provide a description or images.")
+
     system_message: ChatCompletionSystemMessageParam = {
         "role": "system",
         "content": str(CreateRecipePrompt()),
     }
 
+    messages: list[ChatCompletionMessageParam] = [system_message]
+
     # munge text content
-    links = await parse_links(description)
-    part_description = await parse_part_description(description)
-    coros = [link_to_text(link) for link in links]
-    link_texts = await asyncio.gather(*coros)
-    full_description = "\n".join([part_description] + link_texts)
-    text_message: ChatCompletionUserMessageParam = {
-        "role": "user",
-        "content": full_description,
-    }
+    if description:
+        links = await parse_links(description)
+        part_description = await parse_part_description(description)
+        coros = [link_to_text(link) for link in links]
+        link_texts = await asyncio.gather(*coros)
+        full_description = "\n".join([part_description] + link_texts)
+        text_message: ChatCompletionUserMessageParam = {
+            "role": "user",
+            "content": full_description,
+        }
+        messages.append(text_message)
+
+    if not images:
+        resp = await LLM_CLIENT.chat.completions.create(
+            model="gpt-4-turbo-preview",
+            messages=messages,
+        )
+
+        return resp.choices[0].message.content or ""
 
     # image bytes to base64 encoding
     image_message: ChatCompletionUserMessageParam = {
@@ -142,29 +163,41 @@ async def create_recipe_from_text_and_images(
                 "type": "image_url",
                 "image_url": {
                     # TODO: just how much work is this?
-                    "url": base64.b64encode(image_data.read()).decode("utf-8"),
+                    "url": (
+                        "data:image/jpeg;base64,"
+                        f"{base64.b64encode(image_data.read()).decode('utf-8')}"
+                    ),
                 },
             }
             for image_data in images
         ],
     }
 
-    messages: list[ChatCompletionMessageParam] = [
-        system_message,
-        text_message,
-        image_message,
-    ]
+    messages.append(image_message)
 
-    resp = await LLM_CLIENT.chat.completions.create(
-        model="gpt-4-turbo-preview",
-        messages=messages,
+    resp = await httpx.AsyncClient(
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
+        },
+        timeout=60 * 5,
+    ).post(
+        "https://api.openai.com/v1/chat/completions",
+        json={
+            "model": "gpt-4-vision-preview",
+            "messages": messages,
+            "max_tokens": 3000,
+        },
     )
 
-    return resp.choices[0].message.content or ""
+    data = resp.json()
+
+    return data["choices"][0]["message"]["content"] or ""
 
 
 class RecipeGenerator(Protocol):
-    async def __await__(self, description: UserDescription) -> RecipeContent: ...
+    async def __await__(self, description: UserDescription) -> RecipeContent:
+        ...
 
 
 class RecipeBook:
