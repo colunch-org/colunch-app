@@ -8,7 +8,7 @@ from typing import Any, Protocol, Self
 
 import httpx
 
-from app.domain.prompts import CreateRecipePrompt
+from domain.prompts import CreateRecipePrompt
 
 
 OPENAI_TOKEN = os.environ.get("OPENAI_API_KEY")

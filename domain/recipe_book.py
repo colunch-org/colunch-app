@@ -14,6 +14,7 @@ from openai.types.chat import (
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
 )
+import pinecone  # pyright: ignore[reportMissingTypeStubs]
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
 from domain.prompts import CreateRecipePrompt
@@ -26,6 +27,7 @@ type RecipeContent = str
 
 
 LLM_CLIENT = openai.AsyncClient()
+DB_CLIENT = pinecone.Pinecone()
 
 
 class AsyncJolt:
@@ -195,9 +197,50 @@ async def create_recipe_from_text_and_images(
     return data["choices"][0]["message"]["content"] or ""
 
 
+async def recipe_name(recipe: RecipeContent) -> str:
+    msg = f"Please provide an informative but concise name for this recipe: {recipe}"
+    resp = await LLM_CLIENT.chat.completions.create(
+        model="gpt-4-turbo-preview",
+        messages=[{"role": "user", "content": msg}],
+    )
+    return resp.choices[0].message.content or ""
+
+
+async def recipe_summary(recipe: RecipeContent) -> str:
+    msg = (
+        "Please provide an exciting but informative summary of around 25 words "
+        f"for this recipe: {recipe}"
+    )
+    resp = await LLM_CLIENT.chat.completions.create(
+        model="gpt-4-turbo-preview",
+        messages=[{"role": "user", "content": msg}],
+    )
+    return resp.choices[0].message.content or ""
+
+
+async def store_recipe(recipe: RecipeContent):
+
+    emb = await LLM_CLIENT.embeddings.create(
+        input=recipe,
+        model="text-embedding-3-small",
+    )
+    vector = emb.data[0].embedding
+    idx = DB_CLIENT.Index("recipes")
+    async with AsyncJolt():
+        await asyncio.to_thread(
+            idx.upsert,
+            vectors=[
+                {
+                    "id": uuid.uuid4().hex,
+                    "values": vector,
+                    "metadata": {"content": recipe},
+                }
+            ],
+        )
+
+
 class RecipeGenerator(Protocol):
-    async def __await__(self, description: UserDescription) -> RecipeContent:
-        ...
+    async def __await__(self, description: UserDescription) -> RecipeContent: ...
 
 
 class RecipeBook:

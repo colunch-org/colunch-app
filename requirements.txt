@@ -4,6 +4,7 @@ httpx
 Jinja2
 markdown2
 openai
+pinecone-client
 pydantic-settings
 python-multipart
 pytube

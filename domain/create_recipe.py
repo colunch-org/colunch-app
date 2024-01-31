@@ -1,7 +1,7 @@
 """The point."""
 
-from app.domain.aopenai import Chat, ChatMsg, Content, ImgContent, TextContent
-from app.domain.prompts import CreateRecipePrompt
+from domain.aopenai import Chat, ChatMsg, Content, ImgContent, TextContent
+from domain.prompts import CreateRecipePrompt
 
 
 async def create_recipe(text: list[str], imgs: list[str]) -> str:
