@@ -219,16 +219,17 @@ async def recipe_summary(recipe: RecipeContent) -> str:
 
 
 async def store_recipe(recipe: RecipeContent):
-
     emb = await LLM_CLIENT.embeddings.create(
         input=recipe,
         model="text-embedding-3-small",
     )
     vector = emb.data[0].embedding
-    idx = DB_CLIENT.Index("recipes")
+    idx = DB_CLIENT.Index("recipes")  # pyright: ignore[reportUnknownMemberType]
+    if not idx:
+        raise ValueError("No Index.")
     async with AsyncJolt():
         await asyncio.to_thread(
-            idx.upsert,
+            idx.upsert,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
             vectors=[
                 {
                     "id": uuid.uuid4().hex,
@@ -239,13 +240,33 @@ async def store_recipe(recipe: RecipeContent):
         )
 
 
-class RecipeGenerator(Protocol):
-    async def __await__(self, description: UserDescription) -> RecipeContent: ...
+async def search_recipes(content: str, n: int = 3) -> list[str]:
+    emb = await LLM_CLIENT.embeddings.create(
+        input=content,
+        model="text-embedding-3-small",
+    )
+    vector = emb.data[0].embedding
+    idx = DB_CLIENT.Index("recipes")  # pyright: ignore[reportUnknownMemberType]
+    if not idx:
+        raise ValueError("No Index.")
+
+    res = await asyncio.to_thread(
+        idx.query,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+        vector=vector,
+        top_k=n,
+        include_metadata=True,
+    )
+
+    return [m["metadata"]["content"] for m in res["matches"]]
 
 
-class RecipeBook:
-    def __init__(
-        self,
-        generate: RecipeGenerator,
-    ) -> None:
-        self._generate = generate
+class RecipeCreator(Protocol):
+    async def __await__(
+        self, description: UserDescription, images: list[io.BytesIO]
+    ) -> RecipeContent:
+        content = await create_recipe_from_text_and_images(
+            description=description,
+            images=images,
+        )
+        await store_recipe(content)
+        return content
