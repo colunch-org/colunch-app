@@ -33,11 +33,11 @@ def assert_recipe(recipe: str) -> None:
                 "Here is the link: "
                 "https://www.bbcgoodfood.com/recipes/vegan-pizza-margherita "
                 "There are so many links "
-                "https://www.bbcgoodfood.com/recipes/vegan-pizza-margherita "
+                "https://www.bbcgoodfood.com/recipes/vegan-pizza-margherita-again "
             ),
             [
                 "https://www.bbcgoodfood.com/recipes/vegan-pizza-margherita",
-                "https://www.bbcgoodfood.com/recipes/vegan-pizza-margherita",
+                "https://www.bbcgoodfood.com/recipes/vegan-pizza-margherita-again",
             ],
         ),
         (

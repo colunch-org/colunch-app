@@ -1,6 +1,7 @@
 import os
 
 import httpx
+import openai
 
 
 OPENAI_TOKEN = os.environ.get("OPENAI_API_KEY")
@@ -20,3 +21,19 @@ def openai_client_factory(token: str | None = None) -> httpx.AsyncClient:
         },
         timeout=TIMEOUT,
     )
+
+
+async def quick_chat(
+    msg: str,
+    *,
+    openai_client: openai.AsyncClient | None = None,
+    model: str | None = None,
+) -> str:
+    openai_client = openai.AsyncClient() if openai_client is None else openai_client
+    model = DEFAULT_MODEL if model is None else model
+    resp = await openai_client.chat.completions.create(
+        model=DEFAULT_MODEL,
+        messages=[{"role": "user", "content": msg}],
+    )
+    ans = resp.choices[0].message.content or ""
+    return ans.strip()

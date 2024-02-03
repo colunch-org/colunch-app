@@ -16,7 +16,7 @@ from openai.types.chat import (
 import pinecone  # pyright: ignore[reportMissingTypeStubs]
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
-from domain.aopenai import DEFAULT_MODEL, MAX_TOKENS, openai_client_factory
+from domain.aopenai import DEFAULT_MODEL, MAX_TOKENS, openai_client_factory, quick_chat
 from domain.prompts import (
     CREATE_RECIPE_PROMPT,
 )  # pyright: ignore[reportMissingTypeStubs]
@@ -26,6 +26,7 @@ type UserDescription = str
 type PartDescription = str
 type Url = str
 type RecipeContent = str
+type Recipe = dict[str, str]
 
 
 LLM_CLIENT = openai.AsyncClient()
@@ -41,41 +42,25 @@ class AsyncJolt:
 
 
 async def parse_links(description: UserDescription) -> list[Url]:
-    resp = await LLM_CLIENT.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    "Please provide all the links in this text, separated by commas. "
-                    "Include only the links in your response. "
-                    "If there are no links return <NULL>. "
-                    f"Text: {description}"
-                ),
-            }
-        ],
+    msg = (
+        "Please provide all the links in this text, separated by commas. "
+        "Include only the links in your response. "
+        "If there are no links return <NULL>. "
+        f"Text: {description}"
     )
-    return [
-        l.strip()
-        for l in (resp.choices[0].message.content or "").split(",")
-        if l.lower() != "<null>"
-    ]
+
+    ans = await quick_chat(msg, openai_client=LLM_CLIENT)
+    if ans.lower() == "<null>":
+        return []
+    return [l.strip() for l in ans.split(",") if l.lower() != "<null>"]
 
 
 async def parse_part_description(description: UserDescription) -> PartDescription:
-    resp = await LLM_CLIENT.chat.completions.create(
-        model=DEFAULT_MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    "Please remove all the text from this description pertaining to links. "
-                    f"Respond only with the remaining text. Text: {description}"
-                ),
-            }
-        ],
+    msg = (
+        "Please remove all the text from this description pertaining to links. "
+        f"Respond only with the remaining text. Text: {description}"
     )
-    return (resp.choices[0].message.content or "").strip()
+    return await quick_chat(msg, openai_client=LLM_CLIENT)
 
 
 async def text_from_webpage(url: str) -> str:
@@ -202,11 +187,7 @@ async def create_recipe_from_text_and_images(
 
 async def recipe_name(recipe: RecipeContent) -> str:
     msg = f"Please provide an informative but concise name for this recipe: {recipe}"
-    resp = await LLM_CLIENT.chat.completions.create(
-        model=DEFAULT_MODEL,
-        messages=[{"role": "user", "content": msg}],
-    )
-    return resp.choices[0].message.content or ""
+    return await quick_chat(msg, openai_client=LLM_CLIENT)
 
 
 async def recipe_summary(recipe: RecipeContent) -> str:
@@ -214,45 +195,33 @@ async def recipe_summary(recipe: RecipeContent) -> str:
         "Please provide an exciting but informative summary of around 25 words "
         f"for this recipe: {recipe}"
     )
-    resp = await LLM_CLIENT.chat.completions.create(
-        model=DEFAULT_MODEL,
-        messages=[{"role": "user", "content": msg}],
-    )
-    return resp.choices[0].message.content or ""
+    return await quick_chat(msg, openai_client=LLM_CLIENT)
 
 
-async def store_recipe(recipe: RecipeContent):
+async def store_recipe(recipe: Recipe):
     idx = DB_CLIENT.Index("recipes")  # pyright: ignore[reportUnknownMemberType]
     if not idx:
         raise ValueError("No Index.")
 
     # Embedding based on content alone
     emb = await LLM_CLIENT.embeddings.create(
-        input=recipe,
+        input=recipe["content"],
         model="text-embedding-3-small",
     )
-
-    name = await recipe_name(recipe)
-    summary = await recipe_summary(recipe)
     vector = emb.data[0].embedding
+
     async with AsyncJolt():
         await asyncio.to_thread(
             idx.upsert,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
-            vectors=[
-                {
-                    "id": uuid.uuid4().hex,
-                    "values": vector,
-                    "metadata": {
-                        "content": recipe,
-                        "name": name,
-                        "summary": summary,
-                    },
-                }
-            ],
+            vectors=[{"id": uuid.uuid4().hex, "values": vector, "metadata": recipe}],
         )
 
 
-async def search_recipes(content: str, n: int = 3) -> list[str]:
+async def search_recipes(
+    content: str,
+    *,
+    n: int = 3,
+) -> list[Recipe]:
     emb = await LLM_CLIENT.embeddings.create(
         input=content,
         model="text-embedding-3-small",
@@ -262,23 +231,37 @@ async def search_recipes(content: str, n: int = 3) -> list[str]:
     if not idx:
         raise ValueError("No Index.")
 
-    res = await asyncio.to_thread(
-        idx.query,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
-        vector=vector,
-        top_k=n,
-        include_metadata=True,
-    )
+    async with AsyncJolt():
+        res = await asyncio.to_thread(
+            idx.query,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            vector=vector,
+            top_k=n,
+            include_metadata=True,
+        )
 
-    return [m["metadata"]["content"] for m in res["matches"]]
+    return [m["metadata"] for m in res["matches"]]
 
 
 async def create_recipe(
+    *,
     description: UserDescription,
     images: list[io.BytesIO],
-) -> RecipeContent:
+) -> Recipe:
     content = await create_recipe_from_text_and_images(
         description=description,
         images=images,
     )
-    await store_recipe(content)
-    return content
+    name = await recipe_name(content)
+    summary = await recipe_summary(content)
+    recipe = {"content": content, "name": name, "summary": summary}
+    await store_recipe(recipe)
+    return recipe
+
+
+async def random_recipes(n: int = 5) -> tuple[str, list[Recipe]]:
+    msg = (
+        "Create a random phrase that might describe a recipe. "
+        "Use around five words and return only the phrase."
+    )
+    phrase = await quick_chat(msg, openai_client=LLM_CLIENT)
+    return phrase, await search_recipes(phrase, n=n)
