@@ -86,7 +86,11 @@ async def text_from_webpage(url: str) -> str:
     return soup.text
 
 
-async def audio_from_youtube_url(url: Url) -> Path:
+async def audio_from_youtube_url(
+    url: Url,
+    base_path: Path | None = None,
+) -> Path:
+    base_path = Path("/tmp") if base_path is None else base_path
     yt = YouTube(url)
 
     async with AsyncJolt():
@@ -95,7 +99,7 @@ async def audio_from_youtube_url(url: Url) -> Path:
     if not audio:
         raise ValueError("No audio.")
 
-    audio_path = Path(f"{uuid.uuid4().hex}.mp4")
+    audio_path = base_path / f"{uuid.uuid4().hex}.mp4"
 
     async with AsyncJolt():
         await asyncio.to_thread(audio.download, filename=str(audio_path))
@@ -103,12 +107,11 @@ async def audio_from_youtube_url(url: Url) -> Path:
     return audio_path
 
 
-async def transcript_from_audio(audio: Path) -> str:
-    with open(audio, "rb") as audio_file:
-        resp = await LLM_CLIENT.audio.transcriptions.create(
-            file=audio_file,
-            model="whisper-1",
-        )
+async def transcript_from_audio(audio: io.BufferedReader) -> str:
+    resp = await LLM_CLIENT.audio.transcriptions.create(
+        file=audio,
+        model="whisper-1",
+    )
     return resp.text
 
 
@@ -119,7 +122,8 @@ async def link_to_text(link: Url) -> PartDescription:
         text = await text_from_webpage(link)
     elif base.lower().startswith("www.youtube.com"):
         audio_path = await audio_from_youtube_url(link)
-        text = await transcript_from_audio(audio_path)
+        with open(audio_path, "rb") as audio:
+            text = await transcript_from_audio(audio)
     else:
         raise ValueError(f"Unable to process url: {link}")
     return text
