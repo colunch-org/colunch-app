@@ -259,16 +259,6 @@ async def search_recipes(content: str, n: int = 3) -> list[str]:
     return [m["metadata"]["content"] for m in res["matches"]]
 
 
-class RecipeCreatorInterface(Protocol):
-    async def __await__(
-        self,
-        description: UserDescription,
-        images: list[io.BytesIO],
-        **kwargs: Any,
-    ) -> RecipeContent:
-        ...
-
-
 async def create_recipe(
     description: UserDescription,
     images: list[io.BytesIO],
