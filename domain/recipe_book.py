@@ -2,7 +2,6 @@ import asyncio
 import base64
 import io
 from pathlib import Path
-from typing import Any
 import uuid
 
 import bs4
@@ -16,6 +15,7 @@ from openai.types.chat import (
 import pinecone  # pyright: ignore[reportMissingTypeStubs]
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
+from ajolt import AsyncJolt
 from domain.aopenai import DEFAULT_MODEL, MAX_TOKENS, openai_client_factory, quick_chat
 from domain.prompts import (
     CREATE_RECIPE_PROMPT,
@@ -31,14 +31,6 @@ type Recipe = dict[str, str]
 
 LLM_CLIENT = openai.AsyncClient()
 DB_CLIENT = pinecone.Pinecone()
-
-
-class AsyncJolt:
-    async def __aenter__(self) -> None:
-        await asyncio.sleep(0)
-
-    async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
-        await asyncio.sleep(0)
 
 
 async def parse_links(description: UserDescription) -> list[Url]:
