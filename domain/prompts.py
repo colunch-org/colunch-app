@@ -66,14 +66,3 @@ Use this example to format your responses:
     One last chance to really sell the dish here.
 
 """.strip()
-
-
-class CreateRecipePrompt:
-    def __init__(
-        self,
-        content: str | None = None,
-    ) -> None:
-        self.content = CREATE_RECIPE_PROMPT if content is None else content
-
-    def __str__(self) -> str:
-        return self.content

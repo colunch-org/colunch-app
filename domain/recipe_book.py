@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import io
-import os
 from pathlib import Path
 from typing import Any, Protocol
 import uuid
@@ -17,7 +16,10 @@ from openai.types.chat import (
 import pinecone  # pyright: ignore[reportMissingTypeStubs]
 from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
-from domain.prompts import CreateRecipePrompt
+from domain.aopenai import DEFAULT_MODEL, MAX_TOKENS, openai_client_factory
+from domain.prompts import (
+    CREATE_RECIPE_PROMPT,
+)  # pyright: ignore[reportMissingTypeStubs]
 
 
 type UserDescription = str
@@ -62,7 +64,7 @@ async def parse_links(description: UserDescription) -> list[Url]:
 
 async def parse_part_description(description: UserDescription) -> PartDescription:
     resp = await LLM_CLIENT.chat.completions.create(
-        model="gpt-4-turbo-preview",
+        model=DEFAULT_MODEL,
         messages=[
             {
                 "role": "user",
@@ -111,6 +113,7 @@ async def transcript_from_audio(audio: Path) -> str:
 
 
 async def link_to_text(link: Url) -> PartDescription:
+    # TODO: This is horrible
     base = link.replace("https://", "").replace("http://", "")
     if base.lower().startswith("www.bbcgoodfood.com"):
         text = await text_from_webpage(link)
@@ -125,18 +128,22 @@ async def link_to_text(link: Url) -> PartDescription:
 async def create_recipe_from_text_and_images(
     description: UserDescription,
     images: list[io.BytesIO],
+    http_client: httpx.AsyncClient | None = None,
+    openai_client: openai.AsyncClient | None = None,
 ) -> RecipeContent:
     if not (description or images):
         raise ValueError("Provide a description or images.")
 
+    http_client = openai_client_factory() if http_client is None else http_client
+    openai_client = LLM_CLIENT if openai_client is None else openai_client
+
     system_message: ChatCompletionSystemMessageParam = {
         "role": "system",
-        "content": str(CreateRecipePrompt()),
+        "content": CREATE_RECIPE_PROMPT,
     }
 
     messages: list[ChatCompletionMessageParam] = [system_message]
 
-    # munge text content
     if description:
         links = await parse_links(description)
         part_description = await parse_part_description(description)
@@ -150,21 +157,19 @@ async def create_recipe_from_text_and_images(
         messages.append(text_message)
 
     if not images:
-        resp = await LLM_CLIENT.chat.completions.create(
-            model="gpt-4-turbo-preview",
+        resp = await openai_client.chat.completions.create(
+            model=DEFAULT_MODEL,
             messages=messages,
         )
 
         return resp.choices[0].message.content or ""
 
-    # image bytes to base64 encoding
     image_message: ChatCompletionUserMessageParam = {
         "role": "user",
         "content": [
             {
                 "type": "image_url",
                 "image_url": {
-                    # TODO: just how much work is this?
                     "url": (
                         "data:image/jpeg;base64,"
                         f"{base64.b64encode(image_data.read()).decode('utf-8')}"
@@ -177,18 +182,12 @@ async def create_recipe_from_text_and_images(
 
     messages.append(image_message)
 
-    resp = await httpx.AsyncClient(
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
-        },
-        timeout=60 * 5,
-    ).post(
+    resp = await http_client.post(
         "https://api.openai.com/v1/chat/completions",
         json={
             "model": "gpt-4-vision-preview",
             "messages": messages,
-            "max_tokens": 3000,
+            "max_tokens": MAX_TOKENS,
         },
     )
 
@@ -200,7 +199,7 @@ async def create_recipe_from_text_and_images(
 async def recipe_name(recipe: RecipeContent) -> str:
     msg = f"Please provide an informative but concise name for this recipe: {recipe}"
     resp = await LLM_CLIENT.chat.completions.create(
-        model="gpt-4-turbo-preview",
+        model=DEFAULT_MODEL,
         messages=[{"role": "user", "content": msg}],
     )
     return resp.choices[0].message.content or ""
@@ -212,7 +211,7 @@ async def recipe_summary(recipe: RecipeContent) -> str:
         f"for this recipe: {recipe}"
     )
     resp = await LLM_CLIENT.chat.completions.create(
-        model="gpt-4-turbo-preview",
+        model=DEFAULT_MODEL,
         messages=[{"role": "user", "content": msg}],
     )
     return resp.choices[0].message.content or ""
@@ -260,13 +259,23 @@ async def search_recipes(content: str, n: int = 3) -> list[str]:
     return [m["metadata"]["content"] for m in res["matches"]]
 
 
-class RecipeCreator(Protocol):
+class RecipeCreatorInterface(Protocol):
     async def __await__(
-        self, description: UserDescription, images: list[io.BytesIO]
+        self,
+        description: UserDescription,
+        images: list[io.BytesIO],
+        **kwargs: Any,
     ) -> RecipeContent:
-        content = await create_recipe_from_text_and_images(
-            description=description,
-            images=images,
-        )
-        await store_recipe(content)
-        return content
+        ...
+
+
+async def create_recipe(
+    description: UserDescription,
+    images: list[io.BytesIO],
+) -> RecipeContent:
+    content = await create_recipe_from_text_and_images(
+        description=description,
+        images=images,
+    )
+    await store_recipe(content)
+    return content

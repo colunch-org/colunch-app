@@ -4,3 +4,4 @@ scratch
 pyrightconfig.json
 *.db
 .DS_Store
+.ipynb_checkpoints

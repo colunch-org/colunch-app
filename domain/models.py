@@ -1,11 +1,18 @@
 class Recipe:
-    def __init__(self, id: str, name: str, text: str) -> None:
-        self.id = id
+    def __init__(
+        self,
+        name: str,
+        summary: str,
+        ingredients: tuple[str, ...],
+        instructions: tuple[str, ...],
+    ) -> None:
         self.name = name
-        self.text = text
+        self.summary = summary
+        self.ingredients = ingredients
+        self.instructions = instructions
 
     def __repr__(self) -> str:
-        return f"<Recipe(id={self.id}, name={self.name})>"
+        return f"<Recipe(name={self.name}, summary={self.summary})>"
 
     def __str__(self) -> str:
-        return self.text
+        return self.name
