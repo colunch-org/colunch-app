@@ -2,7 +2,7 @@ import asyncio
 import base64
 import io
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 import uuid
 
 import bs4
@@ -218,14 +218,19 @@ async def recipe_summary(recipe: RecipeContent) -> str:
 
 
 async def store_recipe(recipe: RecipeContent):
+    idx = DB_CLIENT.Index("recipes")  # pyright: ignore[reportUnknownMemberType]
+    if not idx:
+        raise ValueError("No Index.")
+
+    # Embedding based on content alone
     emb = await LLM_CLIENT.embeddings.create(
         input=recipe,
         model="text-embedding-3-small",
     )
+
+    name = await recipe_name(recipe)
+    summary = await recipe_summary(recipe)
     vector = emb.data[0].embedding
-    idx = DB_CLIENT.Index("recipes")  # pyright: ignore[reportUnknownMemberType]
-    if not idx:
-        raise ValueError("No Index.")
     async with AsyncJolt():
         await asyncio.to_thread(
             idx.upsert,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
@@ -233,7 +238,11 @@ async def store_recipe(recipe: RecipeContent):
                 {
                     "id": uuid.uuid4().hex,
                     "values": vector,
-                    "metadata": {"content": recipe},
+                    "metadata": {
+                        "content": recipe,
+                        "name": name,
+                        "summary": summary,
+                    },
                 }
             ],
         )
