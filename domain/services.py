@@ -42,16 +42,3 @@ async def create_recipe(
     recipe = Recipe(id=uuid.uuid4().hex, name=name, summary=summary, content=content)
     await store_recipe(recipe, repository=repository, llm=llm)
     return recipe
-
-
-async def random_recipes(
-    repository: RecipeVectorRepository,
-    llm: LLMService,
-    n: int = 5,
-) -> tuple[str, list[Recipe]]:
-    msg = (
-        "Create a random phrase that might describe a recipe. "
-        "Use around five words and return only the phrase."
-    )
-    phrase = await llm.qa(msg)
-    return phrase, await search_recipes(phrase, n=n, repository=repository, llm=llm)

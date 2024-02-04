@@ -183,3 +183,10 @@ class LLMService:
             model="text-embedding-3-small",
         )
         return emb.data[0].embedding
+
+    async def random_phrase(self) -> str:
+        msg = (
+            "Create a random phrase that might describe a recipe. "
+            "Use around five words and return only the phrase."
+        )
+        return await self.qa(msg)

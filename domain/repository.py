@@ -32,6 +32,19 @@ class RecipeVectorRepository:
                 ],
             )
 
+    async def get(self, id: str) -> Recipe:
+        async with AsyncJolt():
+            res = await asyncio.to_thread(
+                self.idx.fetch,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+                ids=[id],
+            )
+        return Recipe(
+            **(
+                {"id": res["id"], "name": "No name", "summary": "No summary"}
+                | res["metadata"]
+            )
+        )
+
     async def search(self, vector: list[float], *, n: int = 3) -> list[Recipe]:
         async with AsyncJolt():
             res = await asyncio.to_thread(
@@ -41,4 +54,12 @@ class RecipeVectorRepository:
                 include_metadata=True,
             )
 
-        return [Recipe(**(m["metadata"] | {"id": m["id"]})) for m in res["matches"]]
+        return [
+            Recipe(
+                **(
+                    {"id": m["id"], "name": "No name", "summary": "No summary"}
+                    | m["metadata"]
+                )
+            )
+            for m in res["matches"]
+        ]

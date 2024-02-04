@@ -5,8 +5,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}CoLunch{% endblock %}</title>
-    <link rel="stylesheet" href="/assets/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="/assets/css/bootstrap.min.css.map" />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="/assets/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="/assets/css/bootstrap.min.css.map"
+    />
     <link
       id="favicon"
       rel="icon"
@@ -28,11 +36,32 @@
           />
           CoLunch
         </a>
+        <form
+          class="d-flex"
+          role="search"
+          hx-post="/create"
+          hx-target="#notifications"
+          hx-swap="afterbegin"
+        >
+          <input
+            name="content"
+            class="form-control me-2"
+            type="search"
+            placeholder="Type to search"
+            aria-label="Search"
+            hx-get="/recipes/"
+            hx-trigger="keyup changed delay:500ms"
+            hx-target="#search-results"
+          />
+          <button class="btn btn-outline-success" type="submit">Create</button>
+        </form>
       </nav>
+      <div id="notifications"></div>
       {% block content %} {% endblock %}
     </div>
     <script src="/assets/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/bootstrap.bundle.min.js.map"></script>
+    <script src="/assets/js/htmx.min.js"></script>
     {% block scripts %} {% endblock %}
   </body>
 </html>

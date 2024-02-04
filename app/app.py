@@ -1,9 +1,13 @@
 import functools
 from typing import Any, Awaitable, Callable
+from urllib.parse import urlencode
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2.utils import urlize
 from markupsafe import Markup
+from pinecone.utils.user_agent import urllib3
 from starlette.applications import Starlette
+from starlette.background import BackgroundTask
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse
@@ -12,6 +16,13 @@ from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 
 from app import config
+from domain.llm_service import LLMService
+from domain.repository import RecipeVectorRepository
+from domain.services import (
+    create_recipe,
+    search_recipes,
+    store_recipe,
+)
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
@@ -43,28 +54,72 @@ def aHTMLResponse(route: Callable[..., Awaitable[str | tuple[str, int]]]):
     return wrapper
 
 
-@aHTMLResponse
-async def homepage(request: Request) -> str:
-    recipes = ...
-    index = TEMPLATES.get_template("index.html")
-    recipe_list = TEMPLATES.get_template("recipe-list.html")
-    recipe_method = TEMPLATES.get_template("recipe-method.html")
-    return index.render(
-        recipe_method=Markup(recipe_method.render()),
-        recipes=Markup(recipe_list.render(recipes=recipes)),
-    )
-
-
 async def favicon(request: Request) -> FileResponse:
     return FileResponse(CONFIG.images_dir / "favicon.ico")
 
 
 @aHTMLResponse
+async def homepage(request: Request) -> str:
+    return TEMPLATES.get_template("index.html").render()
+
+
+@aHTMLResponse
+async def search(request: Request) -> str:
+    content = request.query_params["content"]
+    n = min(20, int(request.query_params.get("n") or 10))
+    recipes = await search_recipes(
+        content,
+        repository=app.state.repo,
+        llm=app.state.llm,
+        n=n,
+    )
+    return TEMPLATES.get_template("recipe-list.html").render(recipes=recipes)
+
+
+async def create(request: Request) -> HTMLResponse:
+    async with request.form() as form:
+        if "content" in form:
+            description = str(form.get("content", ""))
+        else:
+            description = str(form.get("description", ""))
+        images = form.get("images", [])
+    repo: RecipeVectorRepository = request.app.state.repo
+    llm: LLMService = request.app.state
+    task = BackgroundTask(
+        create_recipe,
+        description=description,
+        images=images,
+        repository=repo,
+        llm=llm,
+    )
+    html = """
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <strong>Holy guacamole!</strong> That recipe is in the oven for a couple of minutes ...
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+    """
+    return HTMLResponse(html, background=task)
+
+
+@aHTMLResponse
 async def recipe_detail(request: Request) -> str:
     id = request.path_params["id"]
-    recipe = {"id": id, "name": "Nigle", "summary": "Thornberry", "content": "Smashing"}
-    return TEMPLATES.get_template("recipe-detail.html").render(
-        name=recipe.get("name", ""),
-        summary=recipe.get("summary", ""),
-        content=Markup(recipe.get("content", "")),
-    )
+    repo: RecipeVectorRepository = request.app.state.repo
+    recipe = await repo.get(id)
+    return TEMPLATES.get_template("recipe-detail.html").render(recipe=recipe)
+
+
+app = Starlette(
+    debug=True if CONFIG.env == config.Env.local else False,
+    routes=[
+        Route("/", homepage),
+        Route("/create", create, methods=["POST"]),
+        Route("/recipes/", search),
+        Route("/recipes/{id}", recipe_detail),
+        Route("/favicon", favicon),
+        Mount("/assets", StaticFiles(directory="assets")),
+    ],
+)
+
+app.state.llm = LLMService()
+app.state.repo = RecipeVectorRepository()

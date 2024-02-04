@@ -1,4 +1,7 @@
-{% extends "base.html" %} {% block title %}
-<h3>{{ name }}</h3>
-<p>{{ summary }}</p>
-{% endblock %} {% block content %} {{ content }} {% endblock %}
+{% extends "base.html" %} {% block title %}{{ recipe.name }}{% endblock %} {%
+block content %}
+
+<h3>{{ recipe.name }}</h3>
+<p>{{ recipe.summary }}</p>
+
+{{ recipe.content|safe }} {% endblock %}
