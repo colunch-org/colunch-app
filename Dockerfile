@@ -9,7 +9,10 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN python -m pip install -r requirements.txt
 
+COPY ajolt.py ./ajolt.py
+COPY data.py ./data.py
 COPY assets ./assets
+COPY domain ./domain
 COPY app ./app
 
 CMD uvicorn app.app:app --host $COLUNCH_HOST --port $COLUNCH_PORT
