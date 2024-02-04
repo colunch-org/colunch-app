@@ -84,7 +84,7 @@ async def create(request: Request) -> HTMLResponse:
             description = str(form.get("description", ""))
         images = form.get("images", [])
     repo: RecipeVectorRepository = request.app.state.repo
-    llm: LLMService = request.app.state
+    llm: LLMService = request.app.state.llm
     task = BackgroundTask(
         create_recipe,
         description=description,
@@ -116,7 +116,7 @@ app = Starlette(
         Route("/create", create, methods=["POST"]),
         Route("/recipes/", search),
         Route("/recipes/{id}", recipe_detail),
-        Route("/favicon", favicon),
+        Route("/favicon.ico", favicon),
         Mount("/assets", StaticFiles(directory="assets")),
     ],
 )

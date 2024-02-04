@@ -38,10 +38,11 @@ class RecipeVectorRepository:
                 self.idx.fetch,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
                 ids=[id],
             )
+        recipe = res["vectors"][id]
         return Recipe(
             **(
-                {"id": res["id"], "name": "No name", "summary": "No summary"}
-                | res["metadata"]
+                {"id": id, "name": "No name", "summary": "No summary"}
+                | recipe["metadata"]
             )
         )
 
