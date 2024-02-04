@@ -3,4 +3,5 @@ __pycache__
 scratch
 pyrightconfig.json
 *.db
-*.jpeg
+.DS_Store
+.ipynb_checkpoints

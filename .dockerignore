@@ -1,5 +1,9 @@
 .git
 .venv
+.ipynb_checkpoints
+.pytest_cache
+*.ipynb
 **/__pycache__/**
 scratch
 *.db
+tests
