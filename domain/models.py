@@ -1,9 +1,7 @@
-from typing import Any
-
-
 class Recipe:
     def __init__(
         self,
+        *,
         id: str,
         name: str,
         summary: str,

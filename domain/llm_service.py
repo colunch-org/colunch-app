@@ -2,10 +2,7 @@ import asyncio
 import base64
 from enum import Enum
 import io
-from pathlib import Path
-import uuid
 
-import bs4
 import httpx
 import openai
 from openai.types.chat import (
@@ -13,10 +10,10 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
     ChatCompletionSystemMessageParam,
 )
-from pytube import YouTube  # pyright: ignore[reportMissingTypeStubs]
 
-from ajolt import AsyncJolt
+from data import audio_from_youtube_url, text_from_webpage
 from domain.aopenai import openai_client_factory, quick_chat
+from domain.models import Recipe
 from domain.prompts import CREATE_RECIPE_PROMPT
 
 
@@ -48,35 +45,6 @@ async def parse_part_description(
         f"Respond only with the remaining text. Text: {description}"
     )
     return await quick_chat(msg, openai_client=openai_client)
-
-
-async def text_from_webpage(url: str) -> str:
-    resp = await httpx.AsyncClient(timeout=20).get(url)
-    resp.raise_for_status
-    text = resp.text
-    soup = bs4.BeautifulSoup(text, features="html.parser")
-    return soup.text
-
-
-async def audio_from_youtube_url(
-    url: str,
-    base_path: Path | None = None,
-) -> Path:
-    base_path = Path("/tmp") if base_path is None else base_path
-    yt = YouTube(url)
-
-    async with AsyncJolt():
-        audio = await asyncio.to_thread(yt.streams.get_audio_only)
-
-    if not audio:
-        raise ValueError("No audio.")
-
-    audio_path = base_path / f"{uuid.uuid4().hex}.mp4"
-
-    async with AsyncJolt():
-        await asyncio.to_thread(audio.download, filename=str(audio_path))
-
-    return audio_path
 
 
 async def transcript_from_audio(
@@ -192,3 +160,26 @@ class LLMService:
         data = resp.json()
 
         return data["choices"][0]["message"]["content"] or ""
+
+    async def recipe_name(self, recipe: str) -> str:
+        msg = (
+            "Please provide an informative but concise name for this recipe: "
+            f"{recipe}"
+        )
+        return await self.qa(msg)
+
+    async def recipe_summary(self, recipe: str) -> str:
+        msg = (
+            "Please provide an exciting but informative summary of around 25 words "
+            f"for this recipe: {recipe}"
+        )
+        return await self.qa(msg)
+
+    async def embeddings(self, content: Recipe | str) -> list[float]:
+        if isinstance(content, Recipe):
+            content = content.content
+        emb = await self.openai_client.embeddings.create(
+            input=content,
+            model="text-embedding-3-small",
+        )
+        return emb.data[0].embedding

@@ -41,4 +41,4 @@ class RecipeVectorRepository:
                 include_metadata=True,
             )
 
-        return [m["metadata"] for m in res["matches"]]
+        return [Recipe(**(m["metadata"] | {"id": m["id"]})) for m in res["matches"]]
