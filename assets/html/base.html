@@ -50,7 +50,7 @@
             placeholder="Type to search"
             aria-label="Search"
             hx-get="/recipes/"
-            hx-trigger="keyup changed delay:500ms"
+            hx-trigger="keyup changed delay:500ms, load"
             hx-target="#search-results"
             hx-swap="innerHTML"
           />
