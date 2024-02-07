@@ -2,6 +2,7 @@ import asyncio
 import base64
 from enum import Enum
 import io
+from typing import Sequence
 
 import httpx
 import openai
@@ -94,7 +95,7 @@ class LLMService:
         self,
         *,
         description: str,
-        images: list[io.BufferedReader],
+        images: Sequence[io.BufferedReader],
     ) -> str:
         if not (description or images):
             raise ValueError("Provide a description or images.")
