@@ -24,42 +24,53 @@
   </head>
 
   <body>
-    <div class="container">
-      <nav class="navbar navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+      <div class="container-fluid">
         <a class="navbar-brand" href="/">
           <img
             src="/assets/img/favicon-32x32.png"
-            width="30"
-            height="30"
+            width="32"
+            height="32"
             class="d-inline-block align-top"
             alt=""
           />
           CoLunch
         </a>
-        <form
-          class="d-flex"
-          role="search"
-          hx-post="/create"
-          hx-target="#notifications"
-          hx-swap="afterbegin"
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarTogglerDemo02"
+          aria-controls="navbarTogglerDemo02"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
         >
-          <input
-            name="content"
-            class="form-control me-2"
-            type="search"
-            placeholder="Type to search"
-            aria-label="Search"
-            hx-get="/recipes/"
-            hx-trigger="keyup changed delay:500ms, load"
-            hx-target="#search-results"
-            hx-swap="innerHTML"
-          />
-          <button class="btn btn-outline-success" type="submit">Create</button>
-        </form>
-      </nav>
-      <div id="notifications"></div>
-      {% block content %} {% endblock %}
-    </div>
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarTogglerDemo02">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link active" href="/create">Create</a>
+            </li>
+          </ul>
+          <form class="d-flex" role="search">
+            <input
+              name="content"
+              class="form-control me-2"
+              type="search"
+              placeholder="Type to search"
+              aria-label="Search"
+              hx-get="/recipes/"
+              hx-trigger="keyup changed delay:500ms, load"
+              hx-target="#search-results"
+              hx-swap="innerHTML"
+            />
+          </form>
+        </div>
+      </div>
+    </nav>
+    <div id="notifications"></div>
+    <div class="container">{% block content %} {% endblock %}</div>
     <script src="/assets/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/bootstrap.bundle.min.js.map"></script>
     <script src="/assets/js/htmx.min.js"></script>

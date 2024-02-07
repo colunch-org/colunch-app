@@ -1,4 +1,5 @@
 import io
+from typing import Sequence
 import uuid
 
 from domain.llm_service import LLMService
@@ -32,7 +33,7 @@ async def search_recipes(
 async def create_recipe(
     *,
     description: str,
-    images: list[io.BufferedReader],
+    images: Sequence[io.BufferedReader],
     repository: RecipeVectorRepository,
     llm: LLMService,
 ) -> Recipe:

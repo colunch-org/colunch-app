@@ -1,0 +1,31 @@
+{% extends "base.html" %} {% block content %}
+
+<form action="/create" method="post" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label for="description" class="form-label">Description</label>
+    <textarea
+      class="form-control"
+      id="description"
+      name="description"
+      rows="3"
+      aria-describedby="descriptionHelpBlock"
+      value="{{ description }}"
+    ></textarea>
+    <div id="descriptionHelpBlock" class="form-text">
+      You can enter a description, a link to a recipe webpage or YouTube video,
+      or both!
+    </div>
+  </div>
+  <div class="mb-3">
+    <label for="images" class="form-label">Images</label>
+    <input
+      class="form-control"
+      type="file"
+      id="images"
+      name="images"
+      multiple
+    />
+  </div>
+  <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+{% endblock %}
