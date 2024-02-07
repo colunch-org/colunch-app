@@ -1,29 +1,20 @@
 import functools
 import io
 from typing import Any, Awaitable, Callable
-from urllib.parse import urlencode
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from jinja2.utils import urlize
-from markupsafe import Markup
-from pinecone.utils.user_agent import urllib3
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, RedirectResponse
-from starlette.routing import Mount, Route, WebSocketRoute
+from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
-from starlette.websockets import WebSocket
 
 from app import config
 from domain.llm_service import LLMService
 from domain.repository import RecipeVectorRepository
-from domain.services import (
-    create_recipe,
-    search_recipes,
-    store_recipe,
-)
+from domain.services import create_recipe, search_recipes
 
 
 # https://www.youtube.com/watch?v=UfOQyurFHAo
@@ -99,9 +90,10 @@ async def create(request: Request) -> HTMLResponse | RedirectResponse:
                 image_files: list[bytes] = []
                 for image in form.getlist("images"):
                     assert isinstance(image, UploadFile)
-                    # Read these because otherwise trying to do stuff on a file
-                    # handle that does not exist.
-                    image_files.append(await image.read())
+                    if image.size:
+                        # Read these because otherwise trying to do stuff on a file
+                        # handle that does not exist.
+                        image_files.append(await image.read())
 
             repo: RecipeVectorRepository = request.app.state.repo
             llm: LLMService = request.app.state.llm
