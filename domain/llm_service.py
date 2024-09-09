@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class Model(Enum):
     GPT_35_TURBO = "gpt-3.5-turbo"
     GPT_4 = "gpt-4o"
+    WHISPER_1 = "whisper-1"
 
 
 async def parse_links(description: str, openai_client: openai.AsyncClient) -> list[str]:
@@ -64,7 +65,7 @@ async def transcript_from_audio(
 ) -> str:
     resp = await openai_client.audio.transcriptions.create(
         file=audio,
-        model="whisper-1",
+        model=Model.WHISPER_1.value,
     )
     return resp.text
 
@@ -75,6 +76,7 @@ async def link_to_text(link: str, openai_client: openai.AsyncClient) -> str:
     base = link.replace("https://", "").replace("http://", "")
     if base.lower().startswith("www.youtube.com"):
         audio_path = await audio_from_youtube_url(link)
+        logger.info(audio_path)
         with open(audio_path, "rb") as audio:
             text = await transcript_from_audio(audio, openai_client=openai_client)
     else:
