@@ -1,5 +1,6 @@
 import functools
 import io
+import logging
 from typing import Any, Awaitable, Callable
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -104,14 +105,6 @@ async def create(request: Request) -> HTMLResponse | RedirectResponse:
                 repository=repo,
                 llm=llm,
             )
-            # notifications = [
-            #     """
-            #     <div class="alert alert-success alert-dismissible fade show" role="alert">
-            #       <strong>Holy guacamole!</strong> That recipe is in the oven for a couple of minutes ...
-            #       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            #     </div>
-            #     """
-            # ]
             return RedirectResponse("/", status_code=303, background=task)
         case _:
             raise ValueError("Unsupported method.")
@@ -139,3 +132,6 @@ app = Starlette(
 
 app.state.llm = LLMService()
 app.state.repo = RecipeVectorRepository()
+
+
+logging.basicConfig(level="INFO")

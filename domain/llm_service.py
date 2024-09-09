@@ -2,6 +2,7 @@ import asyncio
 import base64
 from enum import Enum
 import io
+import logging
 from typing import Sequence
 
 import httpx
@@ -18,12 +19,16 @@ from domain.models import Recipe
 from domain.prompts import CREATE_RECIPE_PROMPT
 
 
+logger = logging.getLogger(__name__)
+
+
 class Model(Enum):
     GPT_35_TURBO = "gpt-3.5-turbo"
-    GPT_4_TURBO = "gpt-4-turbo-preview"
+    GPT_4 = "gpt-4o"
 
 
 async def parse_links(description: str, openai_client: openai.AsyncClient) -> list[str]:
+    logger.info(description)
     msg = (
         "Please provide all the links in this text, separated by commas. "
         "Include only the links in your response. "
@@ -32,9 +37,12 @@ async def parse_links(description: str, openai_client: openai.AsyncClient) -> li
     )
 
     ans = await quick_chat(msg, openai_client=openai_client)
+    logger.info(ans)
     if ans.lower() == "<null>":
         return []
-    return [l.strip() for l in ans.split(",") if l.lower() != "<null>"]
+    links = [l.strip() for l in ans.split(",") if l.lower() != "<null>"]
+    logger.info(links)
+    return links
 
 
 async def parse_part_description(
@@ -45,7 +53,9 @@ async def parse_part_description(
         "Please remove all the text from this description pertaining to links. "
         f"Respond only with the remaining text. Text: {description}"
     )
-    return await quick_chat(msg, openai_client=openai_client)
+    logger.info(msg)
+    text = await quick_chat(msg, openai_client=openai_client)
+    return text
 
 
 async def transcript_from_audio(
@@ -61,15 +71,14 @@ async def transcript_from_audio(
 
 async def link_to_text(link: str, openai_client: openai.AsyncClient) -> str:
     # TODO: This is horrible
+    logger.info(link)
     base = link.replace("https://", "").replace("http://", "")
-    if base.lower().startswith("www.bbcgoodfood.com"):
-        text = await text_from_webpage(link)
-    elif base.lower().startswith("www.youtube.com"):
+    if base.lower().startswith("www.youtube.com"):
         audio_path = await audio_from_youtube_url(link)
         with open(audio_path, "rb") as audio:
             text = await transcript_from_audio(audio, openai_client=openai_client)
     else:
-        raise ValueError(f"Unable to process url: {link}")
+        text = await text_from_webpage(link)
     return text
 
 
@@ -88,7 +97,7 @@ class LLMService:
         )
         self.max_tokens = max_tokens
 
-    async def qa(self, q: str, *, model: Model = Model.GPT_4_TURBO) -> str:
+    async def qa(self, q: str, *, model: Model = Model.GPT_4) -> str:
         return await quick_chat(q, openai_client=self.openai_client, model=model.value)
 
     async def create_recipe(
@@ -125,7 +134,7 @@ class LLMService:
 
         if not images:
             resp = await self.openai_client.chat.completions.create(
-                model=Model.GPT_4_TURBO.value,
+                model=Model.GPT_4.value,
                 messages=messages,
             )
 
